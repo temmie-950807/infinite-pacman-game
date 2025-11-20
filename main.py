@@ -3,8 +3,8 @@ from turtle import *
 import time
 import copy
 
-TILE_BUFFER = 2
-TILE_HEIGHT = 14
+TILE_BUFFER = 5
+TILE_HEIGHT = 12
 TILE_WIDTH = 4
 BLOCK = [
     # 直線
@@ -66,7 +66,7 @@ class TileTable:
         print()
 
     def generate_map(self, nowY, nowX, id):
-        if nowY<TILE_BUFFER:
+        if nowY<2:
             return True
 
         if self.table[nowY][nowX]!=0:
@@ -163,8 +163,24 @@ class GameMap:
 
 offsetY = 0
 
+class Unit:
+    def __init__(self, startY, startX, color):
+        self.posY = startY
+        self.posX = startX
+        self.color = color
+
+    def update(self):
+        self.posY += 3
+        pass
+
+class Pacman(Unit):
+    pass
+
+class Ghost(Unit):
+    pass
+
 class Canva:
-    def __init__(self, gameTable: GameMap):
+    def __init__(self, gameTable: GameMap, units: list[Unit]):
         reset()
         tracer(0, delay=None)
         speed(0)
@@ -186,6 +202,11 @@ class Canva:
                 elif self.gameTable[i][j] and self.gameTable[i+1][j]:
                     # 向下的長方形
                     self._draw_rectangle(i, j, i+1, j)
+
+        for unit in units:
+            posY, posX = self._position(unit.posY, unit.posX)
+            teleport(posX, posY)
+            dot(20, unit.color)
 
         update()
 
@@ -213,7 +234,7 @@ class Canva:
         """
         mapY1, mapX1, mapY2, mapX2 = min(mapY1, mapY2), min(mapX1, mapX2), max(mapY1, mapY2), max(mapX1, mapX2)
         pencolor("#0000FF")
-        pensize(15)
+        pensize(10)
         screenY1, screenX1 = self._position(mapY1, mapX1)
         screenY2, screenX2 = self._position(mapY2, mapX2)
         teleport(screenX1, screenY1)
@@ -271,17 +292,45 @@ if __name__ == "__main__":
     screen.setworldcoordinates(0, SCREEN_HEIGHT, SCREEN_WIDTH, 0) # (左下角x, 左下角y, 右上角x, 右上角y)
 
     tileTable = TileTable()
+    gameMap = GameMap(tileTable)
+
+    pacman = Pacman(-1, -1, "yellow")
+    blinky = Ghost(-1, -1, "red")
+    inky = Ghost(-1, -1, "cyan")
+    pinky = Ghost(-1, -1, "pink")
+    clyde = Ghost(-1, -1, "orange")
+    for i in range(gameMap.height-40, -1, -1):
+        for j in range(gameMap.width):
+            if pacman.posY==-1 and pacman.posX==-1 and gameMap[i][j]==0:
+                pacman.posY = i
+                pacman.posX = j
+            elif blinky.posY==-1 and blinky.posX==-1 and gameMap[i][j]==0:
+                blinky.posY = i
+                blinky.posX = j
+            elif inky.posY==-1 and inky.posX==-1 and gameMap[i][j]==0:
+                inky.posY = i
+                inky.posX = j
+            elif pinky.posY==-1 and pinky.posX==-1 and gameMap[i][j]==0:
+                pinky.posY = i
+                pinky.posX = j
+            elif clyde.posY==-1 and clyde.posX==-1 and gameMap[i][j]==0:
+                clyde.posY = i
+                clyde.posX = j
+
+    units = [pacman, blinky, inky, pinky, clyde]
+    
     while True:
         gameMap = GameMap(tileTable)
-        # gameMap.print()
 
-        canva = Canva(gameMap)
-        offsetY += 8
+        canva = Canva(gameMap, units)
+        offsetY += 4
 
         if offsetY==3*MAP_CELL_GAP:
             offsetY = 0
             tileTable.update()
-            # tileTable.print()
+            for unit in units:
+                unit.update()
+            
         time.sleep(0.02)
 
 input()
