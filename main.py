@@ -212,13 +212,10 @@ class Canva:
         給定 table 的對角線座標 (mapY1, mapX1) 跟 (mapY2, mapX2)，在裡面畫出矩形
         """
         mapY1, mapX1, mapY2, mapX2 = min(mapY1, mapY2), min(mapX1, mapX2), max(mapY1, mapY2), max(mapX1, mapX2)
-        mapY1 -= 0.4
-        mapX1 -= 0.4
-        mapY2 += 0.4
-        mapX2 += 0.4
+        pencolor("#0000FF")
+        pensize(15)
         screenY1, screenX1 = self._position(mapY1, mapX1)
         screenY2, screenX2 = self._position(mapY2, mapX2)
-        penup()
         teleport(screenX1, screenY1)
         begin_fill()
         goto(screenX1, screenY2)
@@ -226,7 +223,6 @@ class Canva:
         goto(screenX2, screenY1)
         goto(screenX1, screenY1)
         end_fill()
-        pendown()
 
     def _draw_border(self, mapY, mapX, dir):
         """
@@ -280,12 +276,12 @@ if __name__ == "__main__":
         # gameMap.print()
 
         canva = Canva(gameMap)
-        offsetY += 16
+        offsetY += 8
 
         if offsetY==3*MAP_CELL_GAP:
             offsetY = 0
             tileTable.update()
-            tileTable.print()
-        time.sleep(0.5)
+            # tileTable.print()
+        time.sleep(0.02)
 
 input()
