@@ -36,8 +36,10 @@ MAP_CELL_GAP = 16
 
 class TileTable:
     def __init__(self, height = TILE_HEIGHT + TILE_BUFFER, width = TILE_WIDTH):
-        self.table = [[0] * width for _ in range(height)]
-        self.generate_map(self.height-1, self.width-1, 1)
+        self.table_tmp = [[0] * width for _ in range(height)]
+        self.table = [list() for _ in range(height)]
+        self.generate_map(self.height_tmp-1, self.width_tmp-1, 1)
+        self.build()
 
     @property
     def height(self):
@@ -46,6 +48,14 @@ class TileTable:
     @property
     def width(self):
         return len(self.table[0])
+    
+    @property
+    def height_tmp(self):
+        return len(self.table_tmp)
+    
+    @property
+    def width_tmp(self):
+        return len(self.table_tmp[0])
     
     def __getitem__(self, index):
         return self.table[index]
@@ -56,6 +66,52 @@ class TileTable:
     def is_inside(self, nowY, nowX):
         return 0<=nowY and nowY<self.height and 0<=nowX and nowX<self.width
     
+    def is_inside_tmp(self, nowY, nowX):
+        return 0<=nowY and nowY<self.height_tmp and 0<=nowX and nowX<self.width_tmp
+
+    def generate_map(self, nowY, nowX, id):
+        if nowY<2:
+            return True
+
+        if self.table_tmp[nowY][nowX]!=0:
+            if self.generate_map(nowY-(nowX==0), (nowX-1)%self.width_tmp, id):
+                return True
+        else:
+            random.shuffle(BLOCK)
+            for b in BLOCK:
+                isValid = True
+                for (offsetY, offsetX) in b:
+                    if (not self.is_inside_tmp(nowY+offsetY, nowX+offsetX)) or self.table_tmp[nowY+offsetY][nowX+offsetX]!=0:
+                        isValid = False
+                        break
+
+                if isValid:
+                    for (offsetY, offsetX) in b:
+                        self.table_tmp[nowY+offsetY][nowX+offsetX] = id
+                    if self.generate_map(nowY-(nowX==0), (nowX-1)%self.width_tmp, id%200+1):
+                        return True
+                    for (offsetY, offsetX) in b:
+                        self.table_tmp[nowY+offsetY][nowX+offsetX] = 0
+
+            self.table_tmp[nowY][nowX] = id
+            if self.generate_map(nowY-(nowX==0), (nowX-1)%self.width_tmp, id%200+1):
+                return True
+            self.table_tmp[nowY][nowX] = 0
+
+        return False
+    
+    def build(self):
+        for i in range(self.height):
+            self.table[i] = self.table_tmp[i][-1:0:-1]+self.table_tmp[i]
+
+    def update_refresh(self):
+        self.print_tmp()
+        self.table_tmp.insert(0, [0]*self.width_tmp)
+        del self.table_tmp[-1]
+        self.generate_map(self.height_tmp-1, self.width_tmp-1, max(max(row) for row in self.table_tmp)+1)
+        self.print_tmp()
+        self.build()
+
     def print(self):
         print("Tile Table:")
         for row in self.table:
@@ -65,49 +121,17 @@ class TileTable:
         print("hegiht:", self.height, "width:", self.width)
         print()
 
-    def generate_map(self, nowY, nowX, id):
-        if nowY<2:
-            return True
-
-        if self.table[nowY][nowX]!=0:
-            if self.generate_map(nowY-(nowX==0), (nowX-1)%self.width, id):
-                return True
-        else:
-            random.shuffle(BLOCK)
-            for b in BLOCK:
-                isValid = True
-                for (offsetY, offsetX) in b:
-                    if (not self.is_inside(nowY+offsetY, nowX+offsetX)) or self.table[nowY+offsetY][nowX+offsetX]!=0:
-                        isValid = False
-                        break
-
-                if isValid:
-                    for (offsetY, offsetX) in b:
-                        self.table[nowY+offsetY][nowX+offsetX] = id
-                    if self.generate_map(nowY-(nowX==0), (nowX-1)%self.width, (id+1)%200+1):
-                        return True
-                    for (offsetY, offsetX) in b:
-                        self.table[nowY+offsetY][nowX+offsetX] = 0
-
-            self.table[nowY][nowX] = id
-            if self.generate_map(nowY-(nowX==0), (nowX-1)%self.width, (id+1)%200+1):
-                return True
-            self.table[nowY][nowX] = 0
-
-        return False
-    
-    def update(self):
-        self.table.insert(0, [0]*self.width)
-        del self.table[-1]
-        self.generate_map(self.height-1, self.width-1, max(max(row) for row in self.table)+1)
-
+    def print_tmp(self):
+        print("Tile Table Tmp:")
+        for row in self.table_tmp:
+            for cell in row:
+                print(f"{cell:2}", end=" ")
+            print()
+        print("hegiht:", self.height_tmp, "width:", self.width_tmp)
+        print()
 class GameMap:
     def __init__(self, table: TileTable):
-        self.table = copy.deepcopy(table)
-
-        for idx in range(self.table.height):
-            self.table[idx] = self.table[idx][-1:0:-1]+self.table[idx]
-
+        self.table = table
         self.gameTable = [
             [0 for _ in range(self.table.width*3+5)] for __ in range(self.table.height*3+5)
         ]
@@ -142,6 +166,9 @@ class GameMap:
     def __setitem__(self, index, value):
         self.gameTable[index] = value
 
+    def is_valid(self, nowY, nowX):
+        return 0<=nowY and nowY<self.height and 0<=nowX and nowX<self.width and self.gameTable[nowY][nowX]==0
+
     def fill(self, tileY1, tileX1, tileY2, tileX2):
         tileY1, tileX1, tileY2, tileX2 = min(tileY1, tileY2), min(tileX1, tileX2), max(tileY1, tileY2), max(tileX1, tileX2)
         tileY1 = tileY1*3+3
@@ -151,6 +178,10 @@ class GameMap:
         for i in range(tileY1, tileY2+1):
             for j in range(tileX1, tileX2+1):
                 self.gameTable[i][j] = 1
+
+    def update_refresh(self):
+        tileTable.update_refresh()
+        self.__init__(self.table)
     
     def print(self):
         print("Game Map:")
@@ -160,25 +191,28 @@ class GameMap:
             print()
         print("hegiht:", self.height, "width:", self.width)
         print()
-
-offsetY = 0
-
 class Unit:
-    def __init__(self, startY, startX, color):
+    def __init__(self, startY, startX, color, gameMap):
         self.posY = startY
         self.posX = startX
         self.color = color
+        self.direction = 1
+        self.gameMap = gameMap
 
     def update(self):
-        self.posY += 3
-        pass
+        if self.gameMap.is_valid(self.posY + DY[self.direction], self.posX + DX[self.direction]):
+            self.posY += DY[self.direction]
+            self.posX += DX[self.direction]
 
+    def set_dir(self, dir_code):
+        self.direction = dir_code
+
+    def update_refresh(self):
+        self.posY += 3
 class Pacman(Unit):
     pass
-
 class Ghost(Unit):
     pass
-
 class Canva:
     def __init__(self, gameTable: GameMap, units: list[Unit]):
         reset()
@@ -186,7 +220,12 @@ class Canva:
         speed(0)
         hideturtle()
         self.gameTable = gameTable
+        print("debug id", id(self.gameTable), id(gameTable))
+        self.offsetY = 0
+        self.units = units
 
+    def _draw(self):
+        reset()
         self._draw_axis()
         self._draw_table()
 
@@ -207,7 +246,6 @@ class Canva:
             posY, posX = self._position(unit.posY, unit.posX)
             teleport(posX, posY)
             dot(20, unit.color)
-
         update()
 
     def _position(self, mapY, mapX):
@@ -216,7 +254,7 @@ class Canva:
         """
         screenY = (mapY - (self.gameTable.height-1)/2) * MAP_CELL_GAP + SCREEN_HEIGHT/2 # 為什麼要 -1，不清楚
         screenX = (mapX - (self.gameTable.width-1)/2) * MAP_CELL_GAP + SCREEN_WIDTH/2
-        screenY += offsetY
+        screenY += self.offsetY
         return (screenY, screenX)
     
     def _draw_line(self, mapY1, mapX1, mapY2, mapX2):
@@ -286,6 +324,17 @@ class Canva:
 
         pensize(1)
 
+    def update(self):
+        for unit in units:
+            unit.update()
+        canva.offsetY += 4
+        if canva.offsetY==3*MAP_CELL_GAP:
+            canva.offsetY = 0
+            for unit in units:
+                unit.update_refresh()
+            self.gameTable.update_refresh()
+        self._draw()
+
 if __name__ == "__main__":
     screen = Screen()
     screen.setup(width=SCREEN_WIDTH, height=SCREEN_HEIGHT)
@@ -294,11 +343,11 @@ if __name__ == "__main__":
     tileTable = TileTable()
     gameMap = GameMap(tileTable)
 
-    pacman = Pacman(-1, -1, "yellow")
-    blinky = Ghost(-1, -1, "red")
-    inky = Ghost(-1, -1, "cyan")
-    pinky = Ghost(-1, -1, "pink")
-    clyde = Ghost(-1, -1, "orange")
+    pacman = Pacman(-1, -1, "yellow", gameMap)
+    blinky = Ghost(-1, -1, "red", gameMap)
+    inky = Ghost(-1, -1, "cyan", gameMap)
+    pinky = Ghost(-1, -1, "pink", gameMap)
+    clyde = Ghost(-1, -1, "orange", gameMap)
     for i in range(gameMap.height-40, -1, -1):
         for j in range(gameMap.width):
             if pacman.posY==-1 and pacman.posX==-1 and gameMap[i][j]==0:
@@ -318,19 +367,25 @@ if __name__ == "__main__":
                 clyde.posX = j
 
     units = [pacman, blinky, inky, pinky, clyde]
+
+    canva = Canva(gameMap, units)
+
+    def go_left():  pacman.set_dir(0)
+    def go_up():    pacman.set_dir(1)
+    def go_right(): pacman.set_dir(2)
+    def go_down():  pacman.set_dir(3)
+    screen.onkeypress(go_left, "Left")
+    screen.onkeypress(go_left, "a")
+    screen.onkeypress(go_up, "Up")
+    screen.onkeypress(go_up, "w")
+    screen.onkeypress(go_right, "Right")
+    screen.onkeypress(go_right, "d")
+    screen.onkeypress(go_down, "Down")
+    screen.onkeypress(go_down, "s")
+    screen.listen()
     
     while True:
-        gameMap = GameMap(tileTable)
-
-        canva = Canva(gameMap, units)
-        offsetY += 4
-
-        if offsetY==3*MAP_CELL_GAP:
-            offsetY = 0
-            tileTable.update()
-            for unit in units:
-                unit.update()
-            
+        canva.update()
         time.sleep(0.02)
 
 input()
