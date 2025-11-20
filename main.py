@@ -99,12 +99,16 @@ class Canva:
             self.table[idx] = self.table[idx][-1:0:-1]+self.table[idx]
         self.table.print()
 
-    # 給定網格 (y, x)，回傳該格的左上角座標
     def position(self, y, x):
+        """
+        給定 table 的 (y, x) 座標，回傳該格左上角的畫布座標 (screen_y, screen_x)
+        """
         return ((y-self.table.height*3/2)*MAP_GAP+SCREEN_HEIGHT/2, (x-self.table.width*3/2)*MAP_GAP+SCREEN_WIDTH/2)
     
-    # 給定網格 (y1, x1) 的左上角和 (y2, x2) 的左上角，畫出連線
     def draw_line(self, y1, x1, y2, x2):
+        """
+        給定 table 的 (y1, x1) 跟 (y2, x2)，畫出連線
+        """
         y1, x1 = self.position(y1, x1)
         y2, x2 = self.position(y2, x2)
         teleport(x1, y1)
@@ -112,6 +116,13 @@ class Canva:
 
     # 給定網格的 (y, x)，畫出該格的邊界
     def draw_border(self, y, x, dir):
+        """
+        給定網格的 (y, x) 和方向 dir，畫出該格的邊界
+        0: LEFT
+        1: UP
+        2: RIGHT
+        3: DOWN
+        """
         match dir:
             case 0: # LEFT
                 self.draw_line(y, x, y+1, x)
@@ -124,6 +135,9 @@ class Canva:
 
     # 給定 TILE 的座標左上角 (y1, x1) 跟右下角 (y2, x2)，在裡面畫出矩形
     def draw_inner_wall(self, y1, x1, y2, x2):
+        """
+        給定 table 的座標左上角 (y1, x1) 跟右下角 (y2, x2)，在裡面畫出矩形
+        """
 
         if ((y1, x2)==(y2, x2)):
             y1 = y1*3+0.7
@@ -156,8 +170,10 @@ class Canva:
         end_fill()
         pendown()
 
-    # 畫灰色網格
     def draw_table(self):
+        """
+        畫灰色網格
+        """
         pencolor("#CCCCCC")
         pensize(1)
         for i in range(self.table.height*3):
@@ -166,8 +182,10 @@ class Canva:
                     self.draw_border(i, j, k)
         update()
 
-    # 畫座標軸
     def draw_axis(self):
+        """
+        畫座標軸
+        """
         pensize(3)
         pencolor("#FF0000")
         teleport(-1000, 0)
@@ -178,6 +196,9 @@ class Canva:
         update()
 
     def draw_inner_border(self):
+        """
+        畫內部邊界
+        """
         pencolor("#0000FF")
         fillcolor("#0000FF")
         for i in range(0, self.table.height):
@@ -189,8 +210,10 @@ class Canva:
                         self.draw_inner_wall(i, j, i+DY[k], j+DX[k])
         update()
 
-    # 畫邊框
     def draw_outside_border(self):
+        """
+        畫邊框
+        """
         pensize(5)
         fillcolor("#0000FF")
         for i in range(-1, self.table.height):
