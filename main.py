@@ -2,8 +2,8 @@ import random
 from turtle import *
 import time
 
-TILE_HEIGHT = 9
-TILE_WIDTH = 5
+TILE_HEIGHT = 4
+TILE_WIDTH = 1
 BLOCK = [
     # 直線
     [(0, 0), (1, 0)],
@@ -212,7 +212,7 @@ class GameMap:
 
     def draw_outside_border(self):
         """
-        畫邊框
+        畫外邊框
         """
         pensize(5)
         fillcolor("#0000FF")
@@ -221,7 +221,7 @@ class GameMap:
             self.draw_inner_wall(i, self.table.width, i+1, self.table.width)
         for i in range(-1, self.table.width):
             self.draw_inner_wall(-1, i, -1, i+1)
-            self.draw_inner_wall(self.table.width, i, self.table.width, i+1)
+            self.draw_inner_wall(self.table.height, i, self.table.height, i+1)
         update()
 
 if __name__ == "__main__":
