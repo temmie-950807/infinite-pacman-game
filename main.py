@@ -4,8 +4,6 @@ import time
 
 TILE_HEIGHT = 9
 TILE_WIDTH = 5
-MAP_HEIGHT = TILE_HEIGHT*3
-MAP_WIDTH = TILE_WIDTH*3
 BLOCK = [
     # 直線
     [(0, 0), (1, 0)],
@@ -21,14 +19,22 @@ BLOCK = [
     [(0, 0), (1, 1), (1, 0)],
     [(0, 0), (1, 0), (-1, 1)],
 
-
     [(0, 0), (1, 0), (2, 0), (1, 1)],
     [(0, 0), (1, 0), (2, 0), (0, 1)],
     [(0, 0), (1, 0), (2, 0), (2, 1)],
 ]
 
+GAME_MAP_HEIGHT = TILE_HEIGHT*3
+GAME_MAP_WIDTH = TILE_WIDTH*3
+
 SCREEN_WIDTH = 640
 SCREEN_HEIGHT = 480
+
+# LEFT, UP, RIGHT, DOWN
+DX = [-1, 0, 1, 0]
+DY = [0, -1, 0, 1]
+MAP_GAP = 16
+TILE_GAP = 48
 
 class TileTable:
     def __init__(self, height = TILE_HEIGHT, width = TILE_WIDTH):
@@ -83,13 +89,7 @@ class TileTable:
 
         return False
 
-# LEFT, UP, RIGHT, DOWN
-DX = [-1, 0, 1, 0]
-DY = [0, -1, 0, 1]
-MAP_GAP = 16
-TILE_GAP = 48
-
-class Canva:
+class GameMap:
     def __init__(self, table: TileTable):
         tracer(0, delay=None)
         speed(0)
@@ -233,11 +233,11 @@ if __name__ == "__main__":
 
         tileTable = TileTable()
         tileTable.generate_map()
-        canva = Canva(tileTable)
-        canva.draw_axis()
-        canva.draw_table()
-        canva.draw_outside_border()
-        canva.draw_inner_border()
+        gameMap = GameMap(tileTable)
+        gameMap.draw_axis()
+        gameMap.draw_table()
+        gameMap.draw_outside_border()
+        gameMap.draw_inner_border()
         break
         time.sleep(1)
         reset()
