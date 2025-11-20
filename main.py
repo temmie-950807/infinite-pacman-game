@@ -1,27 +1,29 @@
 import random
 from turtle import *
 import time
+import copy
 
-TILE_HEIGHT = 5
-TILE_WIDTH = 5
+TILE_BUFFER = 2
+TILE_HEIGHT = 14
+TILE_WIDTH = 4
 BLOCK = [
     # 直線
-    [(0, 0), (1, 0)],
-    [(0, 0), (1, 0), (2, 0)],
+    [(0, 0), (-1, 0)],
+    [(0, 0), (-1, 0), (-2, 0)],
 
     # 橫線
-    [(0, 0), (0, 1)],
-    [(0, 0), (0, 1), (0, 2)],
+    [(0, 0), (0, -1)],
+    [(0, 0), (0, -1), (0, -2)],
 
     # L 彎
-    [(0, 0), (0, 1), (1, 0)],
-    [(0, 0), (1, 1), (1, 0)],
-    [(0, 0), (1, 1), (1, 0)],
-    [(0, 0), (1, 0), (-1, 1)],
+    [(0, 0), (0, -1), (-1, 0)],
+    [(0, 0), (-1, -1), (-1, 0)],
+    [(0, 0), (-1, -1), (-1, 0)],
+    [(0, 0), (-1, 0), (1, -1)],
 
-    [(0, 0), (1, 0), (2, 0), (1, 1)],
-    [(0, 0), (1, 0), (2, 0), (0, 1)],
-    [(0, 0), (1, 0), (2, 0), (2, 1)],
+    [(0, 0), (-1, 0), (-2, 0), (-1, -1)],
+    [(0, 0), (-1, 0), (-2, 0), (0, -1)],
+    [(0, 0), (-1, 0), (-2, 0), (-2, -1)],
 ]
 
 SCREEN_WIDTH = 640
@@ -33,9 +35,9 @@ DY = [0, -1, 0, 1]
 MAP_CELL_GAP = 16
 
 class TileTable:
-    def __init__(self, height = TILE_HEIGHT, width = TILE_WIDTH):
+    def __init__(self, height = TILE_HEIGHT + TILE_BUFFER, width = TILE_WIDTH):
         self.table = [[0] * width for _ in range(height)]
-        self.generate_map()
+        self.generate_map(self.height-1, self.width-1, 1)
 
     @property
     def height(self):
@@ -63,12 +65,12 @@ class TileTable:
         print("hegiht:", self.height, "width:", self.width)
         print()
 
-    def generate_map(self, nowY = 0, nowX = 0, id = 1):
-        if nowY==self.height and nowX==0:
+    def generate_map(self, nowY, nowX, id):
+        if nowY<TILE_BUFFER:
             return True
 
         if self.table[nowY][nowX]!=0:
-            if self.generate_map(nowY+(nowX==self.width-1), (nowX+1)%self.width, id):
+            if self.generate_map(nowY-(nowX==0), (nowX-1)%self.width, id):
                 return True
         else:
             random.shuffle(BLOCK)
@@ -79,19 +81,30 @@ class TileTable:
                         isValid = False
                         break
 
-                if (isValid):
+                if isValid:
                     for (offsetY, offsetX) in b:
                         self.table[nowY+offsetY][nowX+offsetX] = id
-                    if self.generate_map(nowY+(nowX==self.width-1), (nowX+1)%self.width, id+1):
+                    if self.generate_map(nowY-(nowX==0), (nowX-1)%self.width, (id+1)%200+1):
                         return True
                     for (offsetY, offsetX) in b:
                         self.table[nowY+offsetY][nowX+offsetX] = 0
 
+            self.table[nowY][nowX] = id
+            if self.generate_map(nowY-(nowX==0), (nowX-1)%self.width, (id+1)%200+1):
+                return True
+            self.table[nowY][nowX] = 0
+
         return False
+    
+    def update(self):
+        self.table.insert(0, [0]*self.width)
+        del self.table[-1]
+        self.generate_map(self.height-1, self.width-1, max(max(row) for row in self.table)+1)
 
 class GameMap:
     def __init__(self, table: TileTable):
-        self.table = table
+        self.table = copy.deepcopy(table)
+
         for idx in range(self.table.height):
             self.table[idx] = self.table[idx][-1:0:-1]+self.table[idx]
 
@@ -105,13 +118,6 @@ class GameMap:
             self.gameTable[i][1] = 1
             self.gameTable[i][-1] = 1
             self.gameTable[i][-2] = 1
-
-        # 上下的外牆
-        for j in range(self.width):
-            self.gameTable[0][j] = 1
-            self.gameTable[1][j] = 1
-            self.gameTable[-1][j] = 1
-            self.gameTable[-2][j] = 1
 
         # 中間的地圖
         for i in range(self.table.height):
@@ -155,14 +161,18 @@ class GameMap:
         print("hegiht:", self.height, "width:", self.width)
         print()
 
+offsetY = 0
+
 class Canva:
     def __init__(self, gameTable: GameMap):
+        reset()
         tracer(0, delay=None)
         speed(0)
         hideturtle()
         self.gameTable = gameTable
 
         self._draw_axis()
+        self._draw_table()
 
         fillcolor("#0000FF")
         for i in range(self.gameTable.height-1):
@@ -177,7 +187,6 @@ class Canva:
                     # 向下的長方形
                     self._draw_rectangle(i, j, i+1, j)
 
-        self._draw_table()
         update()
 
     def _position(self, mapY, mapX):
@@ -186,6 +195,7 @@ class Canva:
         """
         screenY = (mapY - (self.gameTable.height-1)/2) * MAP_CELL_GAP + SCREEN_HEIGHT/2 # 為什麼要 -1，不清楚
         screenX = (mapX - (self.gameTable.width-1)/2) * MAP_CELL_GAP + SCREEN_WIDTH/2
+        screenY += offsetY
         return (screenY, screenX)
     
     def _draw_line(self, mapY1, mapX1, mapY2, mapX2):
@@ -265,11 +275,17 @@ if __name__ == "__main__":
     screen.setworldcoordinates(0, SCREEN_HEIGHT, SCREEN_WIDTH, 0) # (左下角x, 左下角y, 右上角x, 右上角y)
 
     tileTable = TileTable()
-    tileTable.print()
+    while True:
+        gameMap = GameMap(tileTable)
+        # gameMap.print()
 
-    gameMap = GameMap(tileTable)
-    gameMap.print()
+        canva = Canva(gameMap)
+        offsetY += 16
 
-    canva = Canva(gameMap)
+        if offsetY==3*MAP_CELL_GAP:
+            offsetY = 0
+            tileTable.update()
+            tileTable.print()
+        time.sleep(0.5)
 
 input()
