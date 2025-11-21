@@ -370,9 +370,8 @@ class Canva:
             pos = self._position(ghost.pos)
             teleport(pos.x, pos.y)
             dot(20, ghost.color)
-            target = self._position(ghost.targetPos)
-            teleport(target.x, target.y)
-            dot(10, ghost.color)
+            pencolor(ghost.color)
+            self._draw_target(ghost.targetPos)
 
         # 繪製文字
         pencolor("white")
@@ -418,6 +417,23 @@ class Canva:
         goto(screen2.x, screen1.y)
         goto(screen1.x, screen1.y)
         end_fill()
+
+    def _draw_target(self, mapPos: Point):
+        """
+        給定 table 的座標 mapPos，在裡面畫出目標點
+        """
+        screenPos = self._position(mapPos)
+        pensize(2)
+        for x in [1, 5, 10]:
+            teleport(screenPos.x, screenPos.y-x)
+            circle(x)
+        teleport(screenPos.x, screenPos.y)
+        goto(screenPos.x, screenPos.y+15)
+        goto(screenPos.x, screenPos.y-15)
+        teleport(screenPos.x, screenPos.y)
+        goto(screenPos.x+15, screenPos.y)
+        goto(screenPos.x-15, screenPos.y)
+
 class Game:
     def __init__(self, gameMap: GameMap, pacman: Pacman, ghosts: list[Ghost], food: Food, canva: Canva):
         self.gameMap = gameMap
