@@ -274,6 +274,8 @@ class Pacman(Unit):
     def go_down(self):  self.set_dir(3)
 class Ghost(Unit):
     def __init__(self, posY, posX, color, gameMap, screen, speed):
+        self.targetY = -1
+        self.targetX = -1
         super().__init__(posY, posX, color, gameMap, screen, speed)
 class Blinky(Ghost):
     def __init__(self, posY, posX, color, gameMap, screen, speed):
@@ -283,13 +285,57 @@ class Blinky(Ghost):
         """
         Blinky 的攻擊模式：不停地找到與 PacMan 的最短路徑，並朝著最短路徑
         """
-        targetY = units["pacman"].posY
-        targetX = units["pacman"].posX
+        self.targetY = units["pacman"].posY
+        self.targetX = units["pacman"].posX
 
         qq = Queue()
-        qq.put((targetY, targetX))
+        qq.put((self.targetY, self.targetX))
         dis = [[-1 for _ in range(self.gameMap.width)] for __ in range(self.gameMap.height)]
-        dis[targetY][targetX] = 0
+        dis[self.targetY][self.targetX] = 0
+
+        while not qq.empty():
+            nowY, nowX = qq.get()
+            for i in range(4):
+                nextY, nextX = nowY+DY[i], nowX+DX[i]
+                if self.gameMap.is_valid(nextY, nextX) and dis[nextY][nextX]==-1:
+                    dis[nextY][nextX] = dis[nowY][nowX]+1
+                    qq.put((nextY, nextX))
+        
+        mi = -1
+        argMi = -1
+        for i in range(4):
+            nextY, nextX = self.posY+DY[i], self.posX+DX[i]
+            if self.gameMap.is_valid(nextY, nextX):
+                
+                if mi==-1:
+                    mi = dis[nextY][nextX]
+                    argMi = i
+                elif dis[nextY][nextX]<mi:
+                    mi = dis[nextY][nextX]
+                    argMi = i
+
+        self.set_dir(argMi)
+        return super().update(units, food, offsetY)
+class Pinky(Ghost):
+    def __init__(self, posY, posX, color, gameMap, screen, speed):
+        super().__init__(posY, posX, color, gameMap, screen, speed)
+
+    def update(self, units: dict[str, Unit], food: Food, offsetY: int):
+        """
+        Pinky 的攻擊模式：不停地找到與 PacMan 面前四格的最短路徑，並朝著最短路徑移動
+        """
+        self.targetY = units["pacman"].posY
+        self.targetX = units["pacman"].posX
+        targetDir = units["pacman"].direction
+        for i in range(1, 5):
+            if self.gameMap.is_valid(self.targetY+DY[targetDir], self.targetX+DX[targetDir]):
+                self.targetY += DY[targetDir]
+                self.targetX += DX[targetDir]
+
+        qq = Queue()
+        qq.put((self.targetY, self.targetX))
+        dis = [[-1 for _ in range(self.gameMap.width)] for __ in range(self.gameMap.height)]
+        dis[self.targetY][self.targetX] = 0
 
         while not qq.empty():
             nowY, nowX = qq.get()
@@ -359,11 +405,17 @@ class Canva:
             teleport(posX, posY)
             dot(20, unit.color)
 
+            if issubclass(type(unit), Ghost):
+                targetY, targetX = self._position(unit.targetY, unit.targetX)
+                teleport(targetX, targetY)
+                dot(10, unit.color)
+
         # if self.gameMap.is_valid(nextY, nextX) and abs(nextY-((gameMap.height-offset)/2))<=14:
         # print(f"half height: {gameMap.height/2}")
-        pencolor("#00FF00")
-        for i in range(gameMap.width):
-            self._draw_border(gameMap.height/2-self.offsetY/16, i, 0)
+        # pencolor("#00FF00")
+        # for i in range(gameMap.width):
+        #     self._draw_border(gameMap.height/2-self.offsetY/16, i, 0)
+
         update()
 
     def _position(self, mapY, mapX):
@@ -466,7 +518,7 @@ if __name__ == "__main__":
     pacman = Pacman(-1, -1, "yellow", gameMap, screen, 1)
     blinky = Blinky(-1, -1, "red", gameMap, screen, 2)
     inky = Ghost(-1, -1, "cyan", gameMap, screen, 2)
-    pinky = Ghost(-1, -1, "pink", gameMap, screen, 2)
+    pinky = Pinky(-1, -1, "pink", gameMap, screen, 2)
     clyde = Ghost(-1, -1, "orange", gameMap, screen, 2)
 
     for i in range(gameMap.height//2, -1, -1):
