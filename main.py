@@ -481,17 +481,6 @@ class Canva:
         goto(screen1.x, screen1.y)
         end_fill()
 
-    def _draw_border(self, mapY, mapX, dir):
-        """
-        給定 table 的 (mapY, mapX) 和方向 dir，畫出該格的邊界
-        0: RIGHT
-        1: DOWN
-        """
-        if dir==0:
-            self._draw_line(mapY, mapX, mapY, mapX+1)
-        else:
-            self._draw_line(mapY, mapX, mapY+1, mapX)
-
     def update(self):
         for unit in units.values():
             unit.update(self.units, self.food, self.offsetY)
