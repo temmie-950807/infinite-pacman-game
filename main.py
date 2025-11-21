@@ -443,6 +443,7 @@ class Game:
             for ghost in self.ghosts:
                 ghost.update_refresh()
             self.gameMap.update_refresh()
+            self.food.update_refresh()
 
         canva.draw(self.scrollOffset)
 
