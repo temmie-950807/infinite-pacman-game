@@ -44,27 +44,30 @@ class Point:
         self.x = x
 
     def __add__(self, other):
-        return Point(self.x + other.x, self.y + other.y)
+        return Point(self.y + other.y, self.x + other.x)
 
     def __sub__(self, other):
-        return Point(self.x - other.x, self.y - other.y)
+        return Point(self.y - other.y, self.x - other.x)
     
     def __mul__(self, scalar):
-        return Point(self.x * scalar, self.y * scalar)
+        return Point(self.y * scalar, self.x * scalar)
 
     def __eq__(self, other):
-        return self.x == other.x and self.y == other.y
+        return  self.y == other.y and self.x == other.x
+
+    def __str__(self):
+        return f"({self.y}, {self.x})"
 
     def distance_sq(self, other):
         """回傳距離的平方"""
-        return (self.x - other.x)**2 + (self.y - other.y)**2
+        return (self.y - other.y)**2 + (self.x - other.x)**2
 
 class Direction(Enum):
-    LEFT = Point(-1, 0)
-    UP = Point(0, -1)
-    RIGHT = Point(1, 0)
-    DOWN = Point(0, 1)
-    STOP = Point(0, 0)
+    LEFT  = Point(0, -1)
+    UP    = Point(-1, 0)
+    RIGHT = Point(0, 1)
+    DOWN  = Point(1, 0)
+    STOP  = Point(0, 0)
 
 class TileTable:
     def __init__(self, height = TILE_HEIGHT + TILE_BUFFER, width = TILE_WIDTH):
@@ -141,24 +144,6 @@ class TileTable:
         del self.table_tmp[-1]
         self.generate_map(self.height_tmp-1, self.width_tmp-1, max(max(row) for row in self.table_tmp)+1)
         self.build()
-
-    def print(self):
-        print("Tile Table:")
-        for row in self.table:
-            for cell in row:
-                print(f"{cell:2}", end=" ")
-            print()
-        print("hegiht:", self.height, "width:", self.width)
-        print()
-
-    def print_tmp(self):
-        print("Tile Table Tmp:")
-        for row in self.table_tmp:
-            for cell in row:
-                print(f"{cell:2}", end=" ")
-            print()
-        print("hegiht:", self.height_tmp, "width:", self.width_tmp)
-        print()
 class GameMap:
     def __init__(self, table: TileTable):
         self.table = table
@@ -196,12 +181,11 @@ class GameMap:
     def __setitem__(self, index, value):
         self.gameTable[index] = value
 
-    def is_valid(self, nowY, nowX):
+    def is_valid(self, pos: Point):
         """
         回傳布林值代表 (nowY, nowX) 是否在範圍內並且不是牆壁。
         """
-        return 0<=nowY and nowY<self.height and 0<=nowX and nowX<self.width and self.gameTable[nowY][nowX]!=1
-
+        return 0<=pos.y and pos.y<self.height and 0<=pos.x and pos.x<self.width and self.gameTable[pos.y][pos.x]!=1
     def fill(self, tileY1, tileX1, tileY2, tileX2):
         tileY1, tileX1, tileY2, tileX2 = min(tileY1, tileY2), min(tileX1, tileX2), max(tileY1, tileY2), max(tileX1, tileX2)
         tileY1 = tileY1*3+3
@@ -215,15 +199,6 @@ class GameMap:
     def update_refresh(self):
         tileTable.update_refresh()
         self.__init__(self.table)
-    
-    def print(self):
-        print("Game Map:")
-        for row in self.gameTable:
-            for cell in row:
-                print(f"{cell:2}", end=" ")
-            print()
-        print("hegiht:", self.height, "width:", self.width)
-        print()
 class Food:
     def __init__(self, gameMap: GameMap):
         self.gameMap = gameMap
@@ -257,7 +232,7 @@ class Unit:
     def __init__(self, pos, color, gameMap: GameMap, screen, speed):
         self.pos = pos
         self.color = color
-        self.direction = 1
+        self.direction = Direction.STOP
         self.gameMap = gameMap
         self.screen = screen
         self.speed = speed
@@ -268,12 +243,10 @@ class Unit:
 
         if (self.counter==self.speed):
             self.counter = 0
-
-            nextY = self.pos.y + DY[self.direction]
-            nextX = self.pos.x + DX[self.direction]
-
-            if self.gameMap.is_valid(nextY, nextX) and abs(self.pos.y-(gameMap.height/2-offsetY/16))<=14:
-                self.pos = Point(nextY, nextX)
+            
+            nextPos = self.pos + self.direction.value
+            if self.gameMap.is_valid(nextPos) and abs(self.pos.y-(gameMap.height/2-offsetY/16))<=14:
+                self.pos = nextPos
 
     def in_border(self, posY, offsetY):
         return abs(posY-(self.gameMap.height/2-offsetY/16))<=14
@@ -293,54 +266,41 @@ class Pacman(Unit):
         self.screen.listen()
         self.score = 0
 
+    def move(self):
+        if food.haveFood[self.pos.y][self.pos.x]:
+            self.score += 1
+            food.haveFood[self.pos.y][self.pos.x] = False
+
     def update(self, units, food: Food, offsetY = None):
         if food.haveFood[self.pos.y][self.pos.x]:
             self.score += 1
             food.haveFood[self.pos.y][self.pos.x] = False
         return super().update(units, food, offsetY)
 
-    def go_left(self):  self.set_dir(0)
-    def go_up(self):    self.set_dir(1)
-    def go_right(self): self.set_dir(2)
-    def go_down(self):  self.set_dir(3)
+    def go_left(self):  self.set_dir(Direction.LEFT)
+    def go_up(self):    self.set_dir(Direction.UP)
+    def go_right(self): self.set_dir(Direction.RIGHT)
+    def go_down(self):  self.set_dir(Direction.DOWN)
 class Ghost(Unit):
     def __init__(self, pos, color, gameMap, screen, speed):
-        self.targetY = -1
-        self.targetX = -1
+        self.targetPos = Point(-1, -1)
         super().__init__(pos, color, gameMap, screen, speed)
 
-    def get_next_direction(self, targetY, targetX, units, offsetY):
-        self.targetY = targetY
-        self.targetX = targetX
+    def get_next_direction(self, targetPos, units, offsetY):
+        self.targetPos = targetPos
 
-        # qq = Queue()
-        # qq.put((self.targetY, self.targetX))
-        # dis = [[-1 for _ in range(self.gameMap.width)] for __ in range(self.gameMap.height)]
-        # dis[self.targetY][self.targetX] = 0
-
-        # while not qq.empty():
-        #     nowY, nowX = qq.get()
-        #     for i in range(4):
-        #         nextY, nextX = nowY+DY[i], nowX+DX[i]
-        #         if self.gameMap.is_valid(nextY, nextX) and self.in_border(nextY, offsetY) and dis[nextY][nextX]==-1:
-        #             dis[nextY][nextX] = dis[nowY][nowX]+1
-        #             qq.put((nextY, nextX))
-        
         mi = -1
-        argMi = -1
-        for i in range(4):
-            if (i+2)%4 == self.direction:
-                continue
-            nextY, nextX = self.pos.y+DY[i], self.pos.x+DX[i]
-            if self.gameMap.is_valid(nextY, nextX) and self.in_border(nextY, offsetY):
-                dis = ((nextY - self.targetY)**2 + (nextX - self.targetX)**2)**0.5
+        argMi = Direction.STOP
+        for dir in [Direction.LEFT, Direction.UP, Direction.RIGHT, Direction.DOWN]:
+            nextPos = self.pos + dir.value
+            if self.gameMap.is_valid(nextPos) and self.in_border(nextPos.y, offsetY):
+                dis = self.targetPos.distance_sq(nextPos)
                 if mi==-1:
                     mi = dis
-                    argMi = i
+                    argMi = dir
                 elif dis<mi:
                     mi = dis
-                    argMi = i
-
+                    argMi = dir
         return argMi
         
 class Blinky(Ghost):
@@ -348,7 +308,7 @@ class Blinky(Ghost):
         """
         Blinky 的攻擊模式：不停地找到與 PacMan 的最短路徑，並朝著最短路徑
         """
-        nextDirection = self.get_next_direction(units["pacman"].pos.y, units["pacman"].pos.x, units, offsetY)
+        nextDirection = self.get_next_direction(units["pacman"].pos, units, offsetY)
         self.set_dir(nextDirection)
         return super().update(units, food, offsetY)
 class Pinky(Ghost):
@@ -357,15 +317,8 @@ class Pinky(Ghost):
         Pinky 的攻擊模式：不停地找到與 PacMan 面前四格的最短路徑，並朝著最短路徑移動
         """
         targetDir = units["pacman"].direction
-        targetY = units["pacman"].pos.y + DY[targetDir]*4
-        targetX = units["pacman"].pos.x + DX[targetDir]*4
-        # for i in range(1, 5):
-        #     if self.gameMap.is_valid(targetY+DY[targetDir], targetX+DX[targetDir]) and self.in_border(targetY+DY[targetDir], offsetY):
-        #         targetY += DY[targetDir]
-        #         targetX += DX[targetDir]
-        #     else:
-        #         break
-        nextDirection = self.get_next_direction(targetY, targetX, units, offsetY)
+        targetPos = units["pacman"].pos + Direction(targetDir).value*4
+        nextDirection = self.get_next_direction(targetPos, units, offsetY)
         self.set_dir(nextDirection)
         return super().update(units, food, offsetY)
 class Inky(Ghost):
@@ -373,15 +326,13 @@ class Inky(Ghost):
         """
         Inky 的攻擊模式：走向點 A（Blinky 的位置）與點 B（Pac-Man 的面前 2 兩格）的兩倍向量
         """
-        aY, aX = units["blinky"].pos.y, units["blinky"].pos.x
-        bY, bX = units["pacman"].pos.y, units["pacman"].pos.x
+        a = units["blinky"].pos
+        b = units["pacman"].pos
         pacManDirection = units["pacman"].direction
-        bY += 2*DY[pacManDirection]
-        bX += 2*DX[pacManDirection]
+        b = b+Direction(pacManDirection).value*2
 
-        targetY = units["blinky"].pos.y + 2*(bY-aY)
-        targetX = units["blinky"].pos.x + 2*(bX-aX)
-        nextDirection = self.get_next_direction(targetY, targetX, units, offsetY)
+        targetPos = units["blinky"].pos+(b-a)*2
+        nextDirection = self.get_next_direction(targetPos, units, offsetY)
         self.set_dir(nextDirection)
         return super().update(units, food, offsetY)
 class Clyde(Ghost):
@@ -391,10 +342,10 @@ class Clyde(Ghost):
         """
         dist = ((self.pos.y - units["pacman"].pos.y)**2+(self.pos.x - units["pacman"].pos.x)**2)**0.5
         if dist>8:
-            targetY, targetX = units["pacman"].pos.y, units["pacman"].pos.x
+            targetPos = units["pacman"].pos
         else:
-            targetY, targetX = self.gameMap.height/2+10, 2  # 左下角
-        nextDirection = self.get_next_direction(targetY, targetX, units, offsetY)
+            targetPos = Point(self.gameMap.height/2+10, 2)  # 左下角
+        nextDirection = self.get_next_direction(targetPos, units, offsetY)
         self.set_dir(nextDirection)
         return super().update(units, food, offsetY)
 class Canva:
@@ -443,15 +394,9 @@ class Canva:
             dot(20, unit.color)
 
             if issubclass(type(unit), Ghost):
-                target = self._position(unit.targetY, unit.targetX)
+                target = self._position(unit.targetPos.y, unit.targetPos.x)
                 teleport(target.x, target.y)
                 dot(10, unit.color)
-
-        # if self.gameMap.is_valid(nextY, nextX) and abs(nextY-((gameMap.height-offset)/2))<=14:
-        # print(f"half height: {gameMap.height/2}")
-        # pencolor("#00FF00")
-        # for i in range(gameMap.width):
-        #     self._draw_border(gameMap.height/2-self.offsetY/16, i, 0)
 
         update()
 
@@ -551,8 +496,6 @@ if __name__ == "__main__":
         "pinky": pinky,
         "clyde": clyde,
     }
-
-    # game = Game(gameMap, pacman, [blinky, inky, pinky, clyde])
 
     canva = Canva(gameMap, units, food)
     while True:
