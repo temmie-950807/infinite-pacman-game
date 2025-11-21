@@ -464,15 +464,6 @@ class Canva:
         screenY += self.offsetY
         return Point(screenY, screenX)
     
-    def _draw_line(self, mapY1, mapX1, mapY2, mapX2):
-        """
-        給定 table 的 (mapY1, mapX1) 跟 (mapY2, mapX2)，畫出連線
-        """
-        screenY1, screenX1 = self._position(mapY1, mapX1)
-        screenY2, screenX2 = self._position(mapY2, mapX2)
-        teleport(screenX1, screenY1)
-        goto(screenX2, screenY2)
-
     def _draw_rectangle(self, mapY1, mapX1, mapY2, mapX2):
         """
         給定 table 的對角線座標 (mapY1, mapX1) 跟 (mapY2, mapX2)，在裡面畫出矩形
