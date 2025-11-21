@@ -38,7 +38,6 @@ MAP_CELL_GAP = 16
 SPEED = 1 # 越高越慢，必須是 3*MAP_CELL_GAP 的因數
 
 class Point:
-    """用來簡化座標計算的類別"""
     def __init__(self, y, x):
         self.y = y
         self.x = x
@@ -207,9 +206,6 @@ class Food:
             for j in range(gameMap.width):
                 self.haveFood[i][j] = not self.haveFood[i][j]
 
-    def update(self, units):
-        pass
-
     def update_refresh(self):
         haveFoodTmp = [[True for _ in range(self.gameMap.width)] for __ in range(self.gameMap.height)]
 
@@ -238,18 +234,16 @@ class Unit:
         self.speed = speed
         self.counter = 0
 
-    def update(self, units, food, offsetY):
+    def move(self, scrollOffset):
         self.counter += 1
-
         if (self.counter==self.speed):
             self.counter = 0
-            
             nextPos = self.pos + self.direction.value
-            if self.gameMap.is_valid(nextPos) and abs(self.pos.y-(gameMap.height/2-offsetY/16))<=14:
+            if self.gameMap.is_valid(nextPos) and abs(self.pos.y-(gameMap.height/2-scrollOffset/16))<=14:
                 self.pos = nextPos
 
-    def in_border(self, posY, offsetY):
-        return abs(posY-(self.gameMap.height/2-offsetY/16))<=14
+    def in_border(self, posY, scrollOffset):
+        return abs(posY-(self.gameMap.height/2-scrollOffset/16))<=14
 
     def set_dir(self, dir_code):
         self.direction = dir_code
@@ -266,16 +260,17 @@ class Pacman(Unit):
         self.screen.listen()
         self.score = 0
 
-    def move(self):
-        if food.haveFood[self.pos.y][self.pos.x]:
-            self.score += 1
-            food.haveFood[self.pos.y][self.pos.x] = False
+    def move(self, scrollOffset: int, food: Food):
+        self.counter += 1
+        if (self.counter==self.speed):
+            self.counter = 0
+            nextPos = self.pos + self.direction.value
+            if self.gameMap.is_valid(nextPos) and abs(self.pos.y-(gameMap.height/2-scrollOffset/16))<=14:
+                self.pos = nextPos
 
-    def update(self, units, food: Food, offsetY = None):
         if food.haveFood[self.pos.y][self.pos.x]:
             self.score += 1
             food.haveFood[self.pos.y][self.pos.x] = False
-        return super().update(units, food, offsetY)
 
     def go_left(self):  self.set_dir(Direction.LEFT)
     def go_up(self):    self.set_dir(Direction.UP)
@@ -286,95 +281,99 @@ class Ghost(Unit):
         self.targetPos = Point(-1, -1)
         super().__init__(pos, color, gameMap, screen, speed)
 
-    def get_next_direction(self, targetPos, units, offsetY):
+    def think(self, pacman: Pacman, scrollOffset: int):
+        """
+        設定鬼要前進的下一個方向
+        """
+        targetPos = self.get_target_position(pacman)
         self.targetPos = targetPos
 
-        mi = -1
-        argMi = Direction.STOP
+        bestDirection = Direction.STOP
+        minDistance = float("inf")
+        oppositeDirection = Point(-self.direction.value.y, -self.direction.value.x)
+
         for dir in [Direction.LEFT, Direction.UP, Direction.RIGHT, Direction.DOWN]:
+            if dir.value==oppositeDirection:
+                continue
+
             nextPos = self.pos + dir.value
-            if self.gameMap.is_valid(nextPos) and self.in_border(nextPos.y, offsetY):
+            if self.gameMap.is_valid(nextPos) and self.in_border(nextPos.y, scrollOffset):
                 dis = self.targetPos.distance_sq(nextPos)
-                if mi==-1:
-                    mi = dis
-                    argMi = dir
-                elif dis<mi:
-                    mi = dis
-                    argMi = dir
-        return argMi
+                if dis<minDistance:
+                    minDistance = dis
+                    bestDirection = dir
+
+        self.set_dir(bestDirection)
+    
+    def get_target_position(self, pacman):
+        raise NotImplementedError()
         
 class Blinky(Ghost):
-    def update(self, units: dict[str, Unit], food: Food, offsetY: int):
+    def get_target_position(self, pacman: Pacman):
         """
         Blinky 的攻擊模式：不停地找到與 PacMan 的最短路徑，並朝著最短路徑
         """
-        nextDirection = self.get_next_direction(units["pacman"].pos, units, offsetY)
-        self.set_dir(nextDirection)
-        return super().update(units, food, offsetY)
+        return pacman.pos
 class Pinky(Ghost):
-    def update(self, units: dict[str, Unit], food: Food, offsetY: int):
+    def get_target_position(self, pacman: Pacman):
         """
         Pinky 的攻擊模式：不停地找到與 PacMan 面前四格的最短路徑，並朝著最短路徑移動
         """
-        targetDir = units["pacman"].direction
-        targetPos = units["pacman"].pos + Direction(targetDir).value*4
-        nextDirection = self.get_next_direction(targetPos, units, offsetY)
-        self.set_dir(nextDirection)
-        return super().update(units, food, offsetY)
+        targetDir = pacman.direction
+        targetPos = pacman.pos + Direction(targetDir).value*4
+        return targetPos
 class Inky(Ghost):
-    def update(self, units: dict[str, Unit], food: Food, offsetY: int):
+    def __init__(self, pos: int, color: str, gameMap: GameMap, screen, speed: int, blinky: Blinky):
+        self.blinky = blinky
+        super().__init__(pos, color, gameMap, screen, speed)
+
+    def get_target_position(self, pacman: Pacman):
         """
         Inky 的攻擊模式：走向點 A（Blinky 的位置）與點 B（Pac-Man 的面前 2 兩格）的兩倍向量
         """
-        a = units["blinky"].pos
-        b = units["pacman"].pos
-        pacManDirection = units["pacman"].direction
+        a = self.blinky.pos
+        b = pacman.pos
+        pacManDirection = pacman.direction
         b = b+Direction(pacManDirection).value*2
-
-        targetPos = units["blinky"].pos+(b-a)*2
-        nextDirection = self.get_next_direction(targetPos, units, offsetY)
-        self.set_dir(nextDirection)
-        return super().update(units, food, offsetY)
+        targetPos = self.blinky.pos+(b-a)*2
+        return targetPos
 class Clyde(Ghost):
-    def update(self, units: dict[str, Unit], food: Food, offsetY: int):
+    def get_target_position(self, pacman: Pacman):
         """
         Clyde 的攻擊模式：如果在 Pac-Man 8 格之外，則跟 Blinky 一樣攻擊，否則會退回左下角
         """
-        dist = ((self.pos.y - units["pacman"].pos.y)**2+(self.pos.x - units["pacman"].pos.x)**2)**0.5
+        dist = self.pos.distance_sq(pacman.pos)**0.5
         if dist>8:
-            targetPos = units["pacman"].pos
+            targetPos = pacman.pos
         else:
             targetPos = Point(self.gameMap.height/2+10, 2)  # 左下角
-        nextDirection = self.get_next_direction(targetPos, units, offsetY)
-        self.set_dir(nextDirection)
-        return super().update(units, food, offsetY)
+        return targetPos
 class Canva:
-    def __init__(self, gameTable: GameMap, units: list[Unit], food: Food):
+    def __init__(self, gameTable: GameMap, ghosts: list[Ghost], food: Food):
         reset()
         tracer(0, delay=None)
         speed(0)
         hideturtle()
-
         bgcolor("#000000")
 
         self.gameTable = gameTable
-        self.units = units
+        self.ghosts = ghosts
         self.food = food
-        self.offsetY = 0
+        self.scrollOffset = 0
 
-    def _draw(self):
+    def draw(self, scrollOffset: int):
+        self.scrollOffset = scrollOffset
         clear()
-        hideturtle()
-        # self._draw_axis()
-        # self._draw_table()
 
+        # 繪製食物
         for i in range(self.gameTable.height):
             for j in range(self.gameTable.width):
                 if self.food.haveFood[i][j]:
-                    pos = self._position(i, j)
+                    pos = self._position(Point(i, j))
                     teleport(pos.x, pos.y)
                     dot(5, "white")
 
+        # 繪製牆壁
         fillcolor("#0000FF")
         for i in range(self.gameTable.height-1):
             for j in range(self.gameTable.width-1):
@@ -388,26 +387,32 @@ class Canva:
                     # 向下的長方形
                     self._draw_rectangle(i, j, i+1, j)
 
-        for unit in units.values():
-            pos = self._position(unit.pos.y, unit.pos.x)
-            teleport(pos.x, pos.y)
-            dot(20, unit.color)
+        # 繪製 Pac-Man
+        pos = self._position(game.pacman.pos)
+        teleport(pos.x, pos.y)
+        dot(20, game.pacman.color)
 
-            if issubclass(type(unit), Ghost):
-                target = self._position(unit.targetPos.y, unit.targetPos.x)
-                teleport(target.x, target.y)
-                dot(10, unit.color)
+        # 繪製鬼與鬼的目標格
+        for ghost in self.ghosts:
+            pos = self._position(ghost.pos)
+            teleport(pos.x, pos.y)
+            dot(20, ghost.color)
+            target = self._position(ghost.targetPos)
+            teleport(target.x, target.y)
+            dot(10, ghost.color)
 
         update()
 
-    def _position(self, mapY, mapX):
+    def _position(self, mapPos: Point) -> Point:
         """
-        給定 table 的 (mapY, mapX) 座標，回傳該格左上角的畫布座標 (screen_y, screen_x)
+        給定 table 的 mapPos 座標，回傳該格左上角的畫布座標 screenPos
         """
-        screenY = (mapY - (self.gameTable.height-1)/2) * MAP_CELL_GAP + SCREEN_HEIGHT/2 # 為什麼要 -1，不清楚
-        screenX = (mapX - (self.gameTable.width-1)/2) * MAP_CELL_GAP + SCREEN_WIDTH/2
-        screenY += self.offsetY
-        return Point(screenY, screenX)
+        screenPos = Point(
+            (mapPos.y - (self.gameTable.height-1)/2) * MAP_CELL_GAP + SCREEN_HEIGHT/2, # 為什麼要 -1，不清楚
+            (mapPos.x - (self.gameTable.width-1)/2) * MAP_CELL_GAP + SCREEN_WIDTH/2
+        )
+        screenPos.y += self.scrollOffset
+        return screenPos
     
     def _draw_rectangle(self, mapY1, mapX1, mapY2, mapX2):
         """
@@ -416,8 +421,8 @@ class Canva:
         mapY1, mapX1, mapY2, mapX2 = min(mapY1, mapY2), min(mapX1, mapX2), max(mapY1, mapY2), max(mapX1, mapX2)
         pencolor("#0000FF")
         pensize(10)
-        screen1 = self._position(mapY1, mapX1)
-        screen2 = self._position(mapY2, mapX2)
+        screen1 = self._position(Point(mapY1, mapX1))
+        screen2 = self._position(Point(mapY2, mapX2))
         teleport(screen1.x, screen1.y)
         begin_fill()
         goto(screen1.x, screen2.y)
@@ -426,29 +431,22 @@ class Canva:
         goto(screen1.x, screen1.y)
         end_fill()
 
-    def update(self):
-        for unit in units.values():
-            unit.update(self.units, self.food, self.offsetY)
-        canva.offsetY += SPEED
-        if canva.offsetY==3*MAP_CELL_GAP:
-            canva.offsetY = 0
-            for unit in units.values():
-                unit.update_refresh()
-            self.gameTable.update_refresh()
-            self.food.update_refresh()
-        self._draw()
-
 class Game:
-    def __init__(self, gameMap: GameMap, pacman: Pacman, ghosts: list[Ghost]):
+    def __init__(self, gameMap: GameMap, pacman: Pacman, ghosts: list[Ghost], food: Food, canva: Canva):
         self.gameMap = gameMap
         self.pacman = pacman
         self.ghosts = ghosts
+        self.food = food
+        self.canva = canva
         self.scrollOffset = 0
 
     def update(self):
-        self.pacman.update()
+        self.pacman.move(self.scrollOffset, self.food)
+
         for ghost in self.ghosts:
-            ghost.update()
+            ghost.think(self.pacman, self.scrollOffset)
+        for ghost in self.ghosts:
+            ghost.move(self.scrollOffset)
 
         self.scrollOffset += SPEED
         if self.scrollOffset == 3*MAP_CELL_GAP:
@@ -457,6 +455,8 @@ class Game:
             for ghost in self.ghosts:
                 ghost.update_refresh()
             self.gameMap.update_refresh()
+
+        canva.draw(self.scrollOffset)
 
 if __name__ == "__main__":
     screen = Screen()
@@ -469,7 +469,7 @@ if __name__ == "__main__":
 
     pacman = Pacman(Point(-1, -1), "yellow", gameMap, screen, 1)
     blinky = Blinky(Point(-1, -1), "red", gameMap, screen, 2)
-    inky = Inky(Point(-1, -1), "cyan", gameMap, screen, 2)
+    inky = Inky(Point(-1, -1), "cyan", gameMap, screen, 2, blinky)
     pinky = Pinky(Point(-1, -1), "pink", gameMap, screen, 2)
     clyde = Clyde(Point(-1, -1), "orange", gameMap, screen, 2)
     for i in range(gameMap.height//2, -1, -1):
@@ -489,16 +489,10 @@ if __name__ == "__main__":
             elif clyde.pos==Point(-1, -1) and gameMap[i][j]==0:
                 clyde.pos = Point(i, j)
 
-    units: dict[str, Unit] = {
-        "pacman": pacman,
-        "blinky": blinky,
-        "inky": inky,
-        "pinky": pinky,
-        "clyde": clyde,
-    }
-
-    canva = Canva(gameMap, units, food)
+    ghosts = [blinky, inky, pinky, clyde]
+    canva = Canva(gameMap, ghosts, food)
+    game = Game(gameMap, pacman, ghosts, food, canva)
     while True:
-        canva.update()
+        game.update()
 
 input()
