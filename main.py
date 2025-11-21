@@ -285,30 +285,32 @@ class Ghost(Unit):
         self.targetY = targetY
         self.targetX = targetX
 
-        qq = Queue()
-        qq.put((self.targetY, self.targetX))
-        dis = [[-1 for _ in range(self.gameMap.width)] for __ in range(self.gameMap.height)]
-        dis[self.targetY][self.targetX] = 0
+        # qq = Queue()
+        # qq.put((self.targetY, self.targetX))
+        # dis = [[-1 for _ in range(self.gameMap.width)] for __ in range(self.gameMap.height)]
+        # dis[self.targetY][self.targetX] = 0
 
-        while not qq.empty():
-            nowY, nowX = qq.get()
-            for i in range(4):
-                nextY, nextX = nowY+DY[i], nowX+DX[i]
-                if self.gameMap.is_valid(nextY, nextX) and self.in_border(nextY, offsetY) and dis[nextY][nextX]==-1:
-                    dis[nextY][nextX] = dis[nowY][nowX]+1
-                    qq.put((nextY, nextX))
+        # while not qq.empty():
+        #     nowY, nowX = qq.get()
+        #     for i in range(4):
+        #         nextY, nextX = nowY+DY[i], nowX+DX[i]
+        #         if self.gameMap.is_valid(nextY, nextX) and self.in_border(nextY, offsetY) and dis[nextY][nextX]==-1:
+        #             dis[nextY][nextX] = dis[nowY][nowX]+1
+        #             qq.put((nextY, nextX))
         
         mi = -1
         argMi = -1
         for i in range(4):
+            if (i+2)%4 == self.direction:
+                continue
             nextY, nextX = self.posY+DY[i], self.posX+DX[i]
             if self.gameMap.is_valid(nextY, nextX) and self.in_border(nextY, offsetY):
-                
+                dis = ((nextY - self.targetY)**2 + (nextX - self.targetX)**2)**0.5
                 if mi==-1:
-                    mi = dis[nextY][nextX]
+                    mi = dis
                     argMi = i
-                elif dis[nextY][nextX]<mi:
-                    mi = dis[nextY][nextX]
+                elif dis<mi:
+                    mi = dis
                     argMi = i
 
         return argMi
@@ -332,13 +334,50 @@ class Pinky(Ghost):
         """
         Pinky 的攻擊模式：不停地找到與 PacMan 面前四格的最短路徑，並朝著最短路徑移動
         """
-        targetY = units["pacman"].posY
-        targetX = units["pacman"].posX
         targetDir = units["pacman"].direction
-        for i in range(1, 5):
-            if self.gameMap.is_valid(targetY+DY[targetDir], targetX+DX[targetDir]) and self.in_border(targetY+DY[targetDir], offsetY):
-                targetY += DY[targetDir]
-                targetX += DX[targetDir]
+        targetY = units["pacman"].posY + DY[targetDir]*4
+        targetX = units["pacman"].posX + DX[targetDir]*4
+        # for i in range(1, 5):
+        #     if self.gameMap.is_valid(targetY+DY[targetDir], targetX+DX[targetDir]) and self.in_border(targetY+DY[targetDir], offsetY):
+        #         targetY += DY[targetDir]
+        #         targetX += DX[targetDir]
+        #     else:
+        #         break
+        nextDirection = self.get_next_direction(targetY, targetX, units, offsetY)
+        self.set_dir(nextDirection)
+        return super().update(units, food, offsetY)
+class Inky(Ghost):
+    def __init__(self, posY, posX, color, gameMap, screen, speed):
+        super().__init__(posY, posX, color, gameMap, screen, speed)
+
+    def update(self, units: dict[str, Unit], food: Food, offsetY: int):
+        """
+        Inky 的攻擊模式：走向點 A（Blinky 的位置）與點 B（Pac-Man 的面前 2 兩格）的兩倍向量
+        """
+        aY, aX = units["blinky"].posY, units["blinky"].posX
+        bY, bX = units["pacman"].posY, units["pacman"].posX
+        pacManDirection = units["pacman"].direction
+        bY += 2*DY[pacManDirection]
+        bX += 2*DX[pacManDirection]
+
+        targetY = units["blinky"].posY + 2*(bY-aY)
+        targetX = units["blinky"].posX + 2*(bX-aX)
+        nextDirection = self.get_next_direction(targetY, targetX, units, offsetY)
+        self.set_dir(nextDirection)
+        return super().update(units, food, offsetY)
+class Clyde(Ghost):
+    def __init__(self, posY, posX, color, gameMap, screen, speed):
+        super().__init__(posY, posX, color, gameMap, screen, speed)
+
+    def update(self, units: dict[str, Unit], food: Food, offsetY: int):
+        """
+        Clyde 的攻擊模式：如果在 Pac-Man 8 格之外，則跟 Blinky 一樣攻擊，否則會退回左下角
+        """
+        dist = ((self.posY - units["pacman"].posY)**2+(self.posX - units["pacman"].posX)**2)**0.5
+        if dist>8:
+            targetY, targetX = units["pacman"].posY, units["pacman"].posX
+        else:
+            targetY, targetX = self.gameMap.height/2+10, 2  # 左下角
         nextDirection = self.get_next_direction(targetY, targetX, units, offsetY)
         self.set_dir(nextDirection)
         return super().update(units, food, offsetY)
@@ -499,9 +538,9 @@ if __name__ == "__main__":
 
     pacman = Pacman(-1, -1, "yellow", gameMap, screen, 1)
     blinky = Blinky(-1, -1, "red", gameMap, screen, 2)
-    inky = Ghost(-1, -1, "cyan", gameMap, screen, 2)
+    inky = Inky(-1, -1, "cyan", gameMap, screen, 2)
     pinky = Pinky(-1, -1, "pink", gameMap, screen, 2)
-    clyde = Ghost(-1, -1, "orange", gameMap, screen, 2)
+    clyde = Clyde(-1, -1, "orange", gameMap, screen, 2)
 
     for i in range(gameMap.height//2, -1, -1):
         for j in range(gameMap.width):
@@ -532,6 +571,5 @@ if __name__ == "__main__":
     canva = Canva(gameMap, units, food)
     while True:
         canva.update()
-        print(f"y: {pacman.posY} x: {pacman.posX} height: {gameMap.height}")
 
 input()
