@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 TILE_BUFFER = 4
 TILE_HEIGHT = 12
-TILE_WIDTH = 5
+TILE_WIDTH = 4
 BLOCK = [
     # 直線
     [(0, 0), (-1, 0)],
@@ -36,7 +36,7 @@ DX = [-1, 0, 1, 0]
 DY = [0, -1, 0, 1]
 MAP_CELL_GAP = 16
 
-SPEED = 1 # 越高越慢，必須是 3*MAP_CELL_GAP 的因數
+SPEED = 1 # 越高越快，必須是 3*MAP_CELL_GAP 的因數
 
 @dataclass
 class Point:
@@ -374,6 +374,11 @@ class Canva:
             teleport(target.x, target.y)
             dot(10, ghost.color)
 
+        # 繪製文字
+        pencolor("white")
+        teleport(10, SCREEN_HEIGHT-10)
+        write(f"Score: {game.pacman.score}", font=("Arial", 16, "normal"))
+
         update()
 
     def in_canva(self, mapPos: Point) -> bool:
@@ -398,7 +403,10 @@ class Canva:
         """
         給定 table 的對角線座標 (mapY1, mapX1) 跟 (mapY2, mapX2)，在裡面畫出矩形
         """
-        mapY1, mapX1, mapY2, mapX2 = min(mapY1, mapY2), min(mapX1, mapX2), max(mapY1, mapY2), max(mapX1, mapX2)
+        mapY1, mapY2 = sorted((mapY1, mapY2))
+        mapX1, mapX2 = sorted((mapX1, mapX2))
+        if not self.in_canva(Point(mapY1+2, mapX1+2)) and not self.in_canva(Point(mapY2-2, mapX2-2)):
+            return
         pencolor("#0000FF")
         pensize(10)
         screen1 = self._position(Point(mapY1, mapX1))
@@ -448,11 +456,11 @@ if __name__ == "__main__":
     gameMap = GameMap(tileTable)
     food = Food(gameMap)
 
-    pacman = Pacman(Point(-1, -1), "yellow", gameMap, screen, 1)
-    blinky = Blinky(Point(-1, -1), "red", gameMap, screen, 2)
-    inky = Inky(Point(-1, -1), "cyan", gameMap, screen, 2, blinky)
-    pinky = Pinky(Point(-1, -1), "pink", gameMap, screen, 2)
-    clyde = Clyde(Point(-1, -1), "orange", gameMap, screen, 2)
+    pacman = Pacman(Point(-1, -1), "yellow", gameMap, screen, 2)
+    blinky = Blinky(Point(-1, -1), "red", gameMap, screen, 4)
+    inky = Inky(Point(-1, -1), "cyan", gameMap, screen, 4, blinky)
+    pinky = Pinky(Point(-1, -1), "pink", gameMap, screen, 4)
+    clyde = Clyde(Point(-1, -1), "orange", gameMap, screen, 4)
     for i in range(gameMap.height//2, -1, -1):
         for j in range(gameMap.width):
             if pacman.pos==Point(-1, -1) and gameMap[i][j]==0:
