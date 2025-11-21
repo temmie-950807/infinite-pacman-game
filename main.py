@@ -1,10 +1,11 @@
 import random
 from turtle import *
 import time
+from queue import Queue
 import copy
 
-TILE_BUFFER = 5
-TILE_HEIGHT = 12
+TILE_BUFFER = 2
+TILE_HEIGHT = 8
 TILE_WIDTH = 4
 BLOCK = [
     # 直線
@@ -33,6 +34,8 @@ SCREEN_HEIGHT = 480
 DX = [-1, 0, 1, 0]
 DY = [0, -1, 0, 1]
 MAP_CELL_GAP = 16
+
+SPEED = 4
 
 class TileTable:
     def __init__(self, height = TILE_HEIGHT + TILE_BUFFER, width = TILE_WIDTH):
@@ -105,11 +108,9 @@ class TileTable:
             self.table[i] = self.table_tmp[i][-1:0:-1]+self.table_tmp[i]
 
     def update_refresh(self):
-        self.print_tmp()
         self.table_tmp.insert(0, [0]*self.width_tmp)
         del self.table_tmp[-1]
         self.generate_map(self.height_tmp-1, self.width_tmp-1, max(max(row) for row in self.table_tmp)+1)
-        self.print_tmp()
         self.build()
 
     def print(self):
@@ -167,7 +168,10 @@ class GameMap:
         self.gameTable[index] = value
 
     def is_valid(self, nowY, nowX):
-        return 0<=nowY and nowY<self.height and 0<=nowX and nowX<self.width and self.gameTable[nowY][nowX]==0
+        """
+        回傳布林值代表 (nowY, nowX) 是否在範圍內並且不是牆壁。
+        """
+        return 0<=nowY and nowY<self.height and 0<=nowX and nowX<self.width and self.gameTable[nowY][nowX]!=1
 
     def fill(self, tileY1, tileX1, tileY2, tileX2):
         tileY1, tileX1, tileY2, tileX2 = min(tileY1, tileY2), min(tileX1, tileX2), max(tileY1, tileY2), max(tileX1, tileX2)
@@ -192,14 +196,15 @@ class GameMap:
         print("hegiht:", self.height, "width:", self.width)
         print()
 class Unit:
-    def __init__(self, startY, startX, color, gameMap):
-        self.posY = startY
-        self.posX = startX
+    def __init__(self, posY, posX, color, gameMap: GameMap, screen):
+        self.posY = posY
+        self.posX = posX
         self.color = color
         self.direction = 1
         self.gameMap = gameMap
+        self.screen = screen
 
-    def update(self):
+    def update(self, units):
         if self.gameMap.is_valid(self.posY + DY[self.direction], self.posX + DX[self.direction]):
             self.posY += DY[self.direction]
             self.posX += DX[self.direction]
@@ -209,10 +214,62 @@ class Unit:
 
     def update_refresh(self):
         self.posY += 3
+
 class Pacman(Unit):
-    pass
+    def __init__(self, posY, posX, color, gameMap, screen):
+        super().__init__(posY, posX, color, gameMap, screen)
+        self.screen.onkeypress(self.go_left, "a")
+        self.screen.onkeypress(self.go_up, "w")
+        self.screen.onkeypress(self.go_right, "d")
+        self.screen.onkeypress(self.go_down, "s")
+        self.screen.listen()
+
+    def go_left(self):  self.set_dir(0)
+    def go_up(self):    self.set_dir(1)
+    def go_right(self): self.set_dir(2)
+    def go_down(self):  self.set_dir(3)
 class Ghost(Unit):
-    pass
+    def __init__(self, posY, posX, color, gameMap, screen):
+        super().__init__(posY, posX, color, gameMap, screen)
+
+class Blinky(Ghost):
+    def __init__(self, posY, posX, color, gameMap, screen):
+        super().__init__(posY, posX, color, gameMap, screen)
+
+    def update(self, units: dict[str, Unit]):
+        targetY = units["pacman"].posY
+        targetX = units["pacman"].posX
+
+        qq = Queue()
+        qq.put((targetY, targetX))
+        dis = [[-1 for _ in range(self.gameMap.width)] for __ in range(self.gameMap.height)]
+        dis[targetY][targetX] = 0
+
+        while not qq.empty():
+            nowY, nowX = qq.get()
+            print(nowY, nowX)
+            for i in range(4):
+                nextY, nextX = nowY+DY[i], nowX+DX[i]
+                if self.gameMap.is_valid(nextY, nextX) and dis[nextY][nextX]==-1:
+                    dis[nextY][nextX] = dis[nowY][nowX]+1
+                    qq.put((nextY, nextX))
+        
+        mi = -1
+        argMi = -1
+        for i in range(4):
+            nextY, nextX = self.posY+DY[i], self.posX+DX[i]
+            if self.gameMap.is_valid(nextY, nextX):
+                
+                if mi==-1:
+                    mi = dis[nextY][nextX]
+                    argMi = i
+                elif dis[nextY][nextX]<mi:
+                    mi = dis[nextY][nextX]
+                    argMi = i
+
+        self.set_dir(argMi)
+        return super().update(units)
+
 class Canva:
     def __init__(self, gameTable: GameMap, units: list[Unit]):
         reset()
@@ -220,7 +277,6 @@ class Canva:
         speed(0)
         hideturtle()
         self.gameTable = gameTable
-        print("debug id", id(self.gameTable), id(gameTable))
         self.offsetY = 0
         self.units = units
 
@@ -242,7 +298,7 @@ class Canva:
                     # 向下的長方形
                     self._draw_rectangle(i, j, i+1, j)
 
-        for unit in units:
+        for unit in units.values():
             posY, posX = self._position(unit.posY, unit.posX)
             teleport(posX, posY)
             dot(20, unit.color)
@@ -325,12 +381,12 @@ class Canva:
         pensize(1)
 
     def update(self):
-        for unit in units:
-            unit.update()
-        canva.offsetY += 4
+        for unit in units.values():
+            unit.update(self.units)
+        canva.offsetY += SPEED
         if canva.offsetY==3*MAP_CELL_GAP:
             canva.offsetY = 0
-            for unit in units:
+            for unit in units.values():
                 unit.update_refresh()
             self.gameTable.update_refresh()
         self._draw()
@@ -343,12 +399,13 @@ if __name__ == "__main__":
     tileTable = TileTable()
     gameMap = GameMap(tileTable)
 
-    pacman = Pacman(-1, -1, "yellow", gameMap)
-    blinky = Ghost(-1, -1, "red", gameMap)
-    inky = Ghost(-1, -1, "cyan", gameMap)
-    pinky = Ghost(-1, -1, "pink", gameMap)
-    clyde = Ghost(-1, -1, "orange", gameMap)
-    for i in range(gameMap.height-40, -1, -1):
+    pacman = Pacman(-1, -1, "yellow", gameMap, screen)
+    blinky = Blinky(-1, -1, "red", gameMap, screen)
+    inky = Ghost(-1, -1, "cyan", gameMap, screen)
+    pinky = Ghost(-1, -1, "pink", gameMap, screen)
+    clyde = Ghost(-1, -1, "orange", gameMap, screen)
+
+    for i in range(gameMap.height//2, -1, -1):
         for j in range(gameMap.width):
             if pacman.posY==-1 and pacman.posX==-1 and gameMap[i][j]==0:
                 pacman.posY = i
@@ -366,24 +423,15 @@ if __name__ == "__main__":
                 clyde.posY = i
                 clyde.posX = j
 
-    units = [pacman, blinky, inky, pinky, clyde]
+    units: dict[str, Unit] = {
+        "pacman": pacman,
+        "blinky": blinky,
+        "inky": inky,
+        "pinky": pinky,
+        "clyde": clyde
+    }
 
     canva = Canva(gameMap, units)
-
-    def go_left():  pacman.set_dir(0)
-    def go_up():    pacman.set_dir(1)
-    def go_right(): pacman.set_dir(2)
-    def go_down():  pacman.set_dir(3)
-    screen.onkeypress(go_left, "Left")
-    screen.onkeypress(go_left, "a")
-    screen.onkeypress(go_up, "Up")
-    screen.onkeypress(go_up, "w")
-    screen.onkeypress(go_right, "Right")
-    screen.onkeypress(go_right, "d")
-    screen.onkeypress(go_down, "Down")
-    screen.onkeypress(go_down, "s")
-    screen.listen()
-    
     while True:
         canva.update()
         time.sleep(0.02)
