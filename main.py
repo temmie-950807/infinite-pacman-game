@@ -4,9 +4,9 @@ import time
 from queue import Queue
 import copy
 
-TILE_BUFFER = 2
-TILE_HEIGHT = 8
-TILE_WIDTH = 4
+TILE_BUFFER = 4
+TILE_HEIGHT = 12
+TILE_WIDTH = 5
 BLOCK = [
     # 直線
     [(0, 0), (-1, 0)],
@@ -35,7 +35,7 @@ DX = [-1, 0, 1, 0]
 DY = [0, -1, 0, 1]
 MAP_CELL_GAP = 16
 
-SPEED = 4
+SPEED = 1
 
 class TileTable:
     def __init__(self, height = TILE_HEIGHT + TILE_BUFFER, width = TILE_WIDTH):
@@ -196,18 +196,24 @@ class GameMap:
         print("hegiht:", self.height, "width:", self.width)
         print()
 class Unit:
-    def __init__(self, posY, posX, color, gameMap: GameMap, screen):
+    def __init__(self, posY, posX, color, gameMap: GameMap, screen, speed):
         self.posY = posY
         self.posX = posX
         self.color = color
         self.direction = 1
         self.gameMap = gameMap
         self.screen = screen
+        self.speed = speed
+        self.counter = 0
 
     def update(self, units):
-        if self.gameMap.is_valid(self.posY + DY[self.direction], self.posX + DX[self.direction]):
-            self.posY += DY[self.direction]
-            self.posX += DX[self.direction]
+        self.counter += 1
+
+        if (self.counter==self.speed):
+            self.counter = 0
+            if self.gameMap.is_valid(self.posY + DY[self.direction], self.posX + DX[self.direction]):
+                self.posY += DY[self.direction]
+                self.posX += DX[self.direction]
 
     def set_dir(self, dir_code):
         self.direction = dir_code
@@ -216,8 +222,8 @@ class Unit:
         self.posY += 3
 
 class Pacman(Unit):
-    def __init__(self, posY, posX, color, gameMap, screen):
-        super().__init__(posY, posX, color, gameMap, screen)
+    def __init__(self, posY, posX, color, gameMap, screen, speed):
+        super().__init__(posY, posX, color, gameMap, screen, speed)
         self.screen.onkeypress(self.go_left, "a")
         self.screen.onkeypress(self.go_up, "w")
         self.screen.onkeypress(self.go_right, "d")
@@ -229,12 +235,12 @@ class Pacman(Unit):
     def go_right(self): self.set_dir(2)
     def go_down(self):  self.set_dir(3)
 class Ghost(Unit):
-    def __init__(self, posY, posX, color, gameMap, screen):
-        super().__init__(posY, posX, color, gameMap, screen)
+    def __init__(self, posY, posX, color, gameMap, screen, speed):
+        super().__init__(posY, posX, color, gameMap, screen, speed)
 
 class Blinky(Ghost):
-    def __init__(self, posY, posX, color, gameMap, screen):
-        super().__init__(posY, posX, color, gameMap, screen)
+    def __init__(self, posY, posX, color, gameMap, screen, speed):
+        super().__init__(posY, posX, color, gameMap, screen, speed)
 
     def update(self, units: dict[str, Unit]):
         targetY = units["pacman"].posY
@@ -247,7 +253,6 @@ class Blinky(Ghost):
 
         while not qq.empty():
             nowY, nowX = qq.get()
-            print(nowY, nowX)
             for i in range(4):
                 nextY, nextX = nowY+DY[i], nowX+DX[i]
                 if self.gameMap.is_valid(nextY, nextX) and dis[nextY][nextX]==-1:
@@ -399,11 +404,11 @@ if __name__ == "__main__":
     tileTable = TileTable()
     gameMap = GameMap(tileTable)
 
-    pacman = Pacman(-1, -1, "yellow", gameMap, screen)
-    blinky = Blinky(-1, -1, "red", gameMap, screen)
-    inky = Ghost(-1, -1, "cyan", gameMap, screen)
-    pinky = Ghost(-1, -1, "pink", gameMap, screen)
-    clyde = Ghost(-1, -1, "orange", gameMap, screen)
+    pacman = Pacman(-1, -1, "yellow", gameMap, screen, 1)
+    blinky = Blinky(-1, -1, "red", gameMap, screen, 2)
+    inky = Ghost(-1, -1, "cyan", gameMap, screen, 2)
+    pinky = Ghost(-1, -1, "pink", gameMap, screen, 2)
+    clyde = Ghost(-1, -1, "orange", gameMap, screen, 2)
 
     for i in range(gameMap.height//2, -1, -1):
         for j in range(gameMap.width):
@@ -434,6 +439,5 @@ if __name__ == "__main__":
     canva = Canva(gameMap, units)
     while True:
         canva.update()
-        time.sleep(0.02)
 
 input()
