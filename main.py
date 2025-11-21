@@ -2,6 +2,7 @@ import random
 from turtle import *
 from queue import Queue
 import copy
+from enum import Enum
 
 TILE_BUFFER = 4
 TILE_HEIGHT = 12
@@ -35,6 +36,35 @@ DY = [0, -1, 0, 1]
 MAP_CELL_GAP = 16
 
 SPEED = 1 # 越高越慢，必須是 3*MAP_CELL_GAP 的因數
+
+class Point:
+    """用來簡化座標計算的類別"""
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def __add__(self, other):
+        return Point(self.x + other.x, self.y + other.y)
+
+    def __sub__(self, other):
+        return Point(self.x - other.x, self.y - other.y)
+    
+    def __mul__(self, scalar):
+        return Point(self.x * scalar, self.y * scalar)
+
+    def __eq__(self, other):
+        return self.x == other.x and self.y == other.y
+
+    def distance_sq(self, other):
+        """回傳距離的平方"""
+        return (self.x - other.x)**2 + (self.y - other.y)**2
+
+class Direction(Enum):
+    LEFT = Point(-1, 0)
+    UP = Point(0, -1)
+    RIGHT = Point(1, 0)
+    DOWN = Point(0, 1)
+    STOP = Point(0, 0)
 
 class TileTable:
     def __init__(self, height = TILE_HEIGHT + TILE_BUFFER, width = TILE_WIDTH):
