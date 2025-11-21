@@ -3,6 +3,7 @@ from turtle import *
 from queue import Queue
 import copy
 from enum import Enum
+from dataclasses import dataclass
 
 TILE_BUFFER = 4
 TILE_HEIGHT = 12
@@ -37,36 +38,23 @@ MAP_CELL_GAP = 16
 
 SPEED = 1 # 越高越慢，必須是 3*MAP_CELL_GAP 的因數
 
+@dataclass
 class Point:
-    def __init__(self, y, x):
-        self.y = y
-        self.x = x
-
-    def __add__(self, other):
-        return Point(self.y + other.y, self.x + other.x)
-
-    def __sub__(self, other):
-        return Point(self.y - other.y, self.x - other.x)
-    
-    def __mul__(self, scalar):
-        return Point(self.y * scalar, self.x * scalar)
-
-    def __eq__(self, other):
-        return  self.y == other.y and self.x == other.x
-
-    def __str__(self):
-        return f"({self.y}, {self.x})"
-
-    def distance_sq(self, other):
-        """回傳距離的平方"""
-        return (self.y - other.y)**2 + (self.x - other.x)**2
+    y: int
+    x: int
+    def __add__(self, other): return Point(self.y + other.y, self.x + other.x)
+    def __sub__(self, other): return Point(self.y - other.y, self.x - other.x)
+    def __mul__(self, scalar): return Point(self.y * scalar, self.x * scalar)
+    def __eq__(self, other): return  self.y == other.y and self.x == other.x
+    def __str__(self): return f"({self.y}, {self.x})"
+    def distance_sq(self, other): return (self.y - other.y)**2 + (self.x - other.x)**2
 
 class Direction(Enum):
-    LEFT  = Point(0, -1)
-    UP    = Point(-1, 0)
-    RIGHT = Point(0, 1)
-    DOWN  = Point(1, 0)
-    STOP  = Point(0, 0)
+    LEFT, UP, RIGHT, DOWN, STOP = Point(0, -1), Point(-1, 0), Point(0, 1), Point(1, 0), Point(0, 0)
+
+    @property
+    def opposite(self):
+        return Point(-self.value.y, -self.value.x)
 
 class TileTable:
     def __init__(self, height = TILE_HEIGHT + TILE_BUFFER, width = TILE_WIDTH):
@@ -290,7 +278,7 @@ class Ghost(Unit):
 
         bestDirection = Direction.STOP
         minDistance = float("inf")
-        oppositeDirection = Point(-self.direction.value.y, -self.direction.value.x)
+        oppositeDirection = self.direction.opposite
 
         for dir in [Direction.LEFT, Direction.UP, Direction.RIGHT, Direction.DOWN]:
             if dir.value==oppositeDirection:
