@@ -557,6 +557,26 @@ class Canva:
             self.food.update_refresh()
         self._draw()
 
+class Game:
+    def __init__(self, gameMap: GameMap, pacman: Pacman, ghosts: list[Ghost]):
+        self.gameMap = gameMap
+        self.pacman = pacman
+        self.ghosts = ghosts
+        self.scrollOffset = 0
+
+    def update(self):
+        self.pacman.update()
+        for ghost in self.ghosts:
+            ghost.update()
+
+        self.scrollOffset += SPEED
+        if self.scrollOffset == 3*MAP_CELL_GAP:
+            self.scrollOffset = 0
+            self.pacman.update_refresh()
+            for ghost in self.ghosts:
+                ghost.update_refresh()
+            self.gameMap.update_refresh()
+
 if __name__ == "__main__":
     screen = Screen()
     screen.setup(width=SCREEN_WIDTH, height=SCREEN_HEIGHT)
@@ -597,6 +617,8 @@ if __name__ == "__main__":
         "pinky": pinky,
         "clyde": clyde,
     }
+
+    game = Game(gameMap, pacman, [blinky, inky, pinky, clyde])
 
     canva = Canva(gameMap, units, food)
     while True:
