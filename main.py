@@ -211,16 +211,13 @@ class Unit:
         self.speed = speed
         self.counter = 0
 
-    def move(self, scrollOffset):
+    def move(self, in_canva: callable):
         self.counter += 1
         if (self.counter==self.speed):
             self.counter = 0
             nextPos = self.pos + self.direction.value
-            if self.gameMap.is_valid(nextPos) and abs(self.pos.y-(gameMap.height/2-scrollOffset/16))<=14:
+            if self.gameMap.is_valid(nextPos) and in_canva(nextPos):
                 self.pos = nextPos
-
-    def in_border(self, posY, scrollOffset):
-        return abs(posY-(self.gameMap.height/2-scrollOffset/16))<=14
 
     def set_dir(self, dir_code):
         self.direction = dir_code
@@ -237,12 +234,12 @@ class Pacman(Unit):
         self.screen.listen()
         self.score = 0
 
-    def move(self, scrollOffset: int, food: Food):
+    def move(self, food: Food, in_canva: callable):
         self.counter += 1
         if (self.counter==self.speed):
             self.counter = 0
             nextPos = self.pos + self.direction.value
-            if self.gameMap.is_valid(nextPos) and abs(self.pos.y-(gameMap.height/2-scrollOffset/16))<=14:
+            if self.gameMap.is_valid(nextPos) and in_canva(nextPos):
                 self.pos = nextPos
 
         if food.haveFood[self.pos.y][self.pos.x]:
@@ -258,7 +255,7 @@ class Ghost(Unit):
         self.targetPos = Point(-1, -1)
         super().__init__(pos, color, gameMap, screen, speed)
 
-    def think(self, pacman: Pacman, scrollOffset: int):
+    def think(self, pacman: Pacman):
         """
         設定鬼要前進的下一個方向
         """
@@ -274,7 +271,7 @@ class Ghost(Unit):
                 continue
 
             nextPos = self.pos + dir.value
-            if self.gameMap.is_valid(nextPos) and self.in_border(nextPos.y, scrollOffset):
+            if self.gameMap.is_valid(nextPos):
                 dis = self.targetPos.distance_sq(nextPos)
                 if dis<minDistance:
                     minDistance = dis
@@ -284,7 +281,6 @@ class Ghost(Unit):
     
     def get_target_position(self, pacman):
         raise NotImplementedError()
-        
 class Blinky(Ghost):
     def get_target_position(self, pacman: Pacman):
         """
@@ -380,6 +376,13 @@ class Canva:
 
         update()
 
+    def in_canva(self, mapPos: Point) -> bool:
+        """
+        回傳布林值代表 mapPos 座標是否在畫布範圍內
+        """
+        screenPos = self._position(mapPos)
+        return 0<=screenPos.y and screenPos.y<=SCREEN_HEIGHT and 0<=screenPos.x and screenPos.x<=SCREEN_WIDTH
+
     def _position(self, mapPos: Point) -> Point:
         """
         給定 table 的 mapPos 座標，回傳該格左上角的畫布座標 screenPos
@@ -407,7 +410,6 @@ class Canva:
         goto(screen2.x, screen1.y)
         goto(screen1.x, screen1.y)
         end_fill()
-
 class Game:
     def __init__(self, gameMap: GameMap, pacman: Pacman, ghosts: list[Ghost], food: Food, canva: Canva):
         self.gameMap = gameMap
@@ -417,13 +419,14 @@ class Game:
         self.canva = canva
         self.scrollOffset = 0
 
-    def update(self):
-        self.pacman.move(self.scrollOffset, self.food)
+    def in_canva(self, mapPos: Point) -> bool:
+        return self.canva.in_canva(mapPos)
 
+    def update(self):
+        self.pacman.move(self.food, self.in_canva)
         for ghost in self.ghosts:
-            ghost.think(self.pacman, self.scrollOffset)
-        for ghost in self.ghosts:
-            ghost.move(self.scrollOffset)
+            ghost.think(self.pacman)
+            ghost.move(self.in_canva)
 
         self.scrollOffset += SPEED
         if self.scrollOffset == 3*MAP_CELL_GAP:
