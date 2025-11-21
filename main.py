@@ -492,36 +492,6 @@ class Canva:
         else:
             self._draw_line(mapY, mapX, mapY+1, mapX)
 
-    def _draw_table(self):
-        """
-        畫灰色座標網格
-        """
-        pencolor("#CCCCCC")
-        pensize(1)
-        for i in range(0, self.gameTable.height):
-            for j in range(0, self.gameTable.width):
-                if i<self.gameTable.height-1 and j<self.gameTable.width-1:
-                    self._draw_border(i, j, 0)  # RIGHT
-                    self._draw_border(i, j, 1)  # DOWN
-                elif i==self.gameTable.height-1 and j<self.gameTable.width-1:
-                    self._draw_border(i, j, 0)  # RIGHT
-                elif i<self.gameTable.height-1 and j==self.gameTable.width-1:
-                    self._draw_border(i, j, 1)  # DOWN
-
-    def _draw_axis(self):
-        """
-        畫座標軸
-        """
-        pensize(3)
-        pencolor("#FF0000")
-        teleport(-1000, SCREEN_HEIGHT/2)
-        goto(1000, SCREEN_HEIGHT/2)
-        pencolor("#00FF00")
-        teleport(SCREEN_WIDTH/2, -1000)
-        goto(SCREEN_WIDTH/2, 1000)
-
-        pensize(1)
-
     def update(self):
         for unit in units.values():
             unit.update(self.units, self.food, self.offsetY)
