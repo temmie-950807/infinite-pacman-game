@@ -243,6 +243,9 @@ class Blinky(Ghost):
         super().__init__(posY, posX, color, gameMap, screen, speed)
 
     def update(self, units: dict[str, Unit]):
+        """
+        Blinky 的攻擊模式：不停地找到與 PacMan 的最短路徑，並朝著最短路徑
+        """
         targetY = units["pacman"].posY
         targetX = units["pacman"].posX
 
