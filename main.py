@@ -4,7 +4,7 @@ from queue import Queue
 import copy
 
 TILE_BUFFER = 4
-TILE_HEIGHT = 5
+TILE_HEIGHT = 12
 TILE_WIDTH = 5
 BLOCK = [
     # 直線
@@ -234,7 +234,7 @@ class Unit:
         self.speed = speed
         self.counter = 0
 
-    def update(self, units = None, food = None):
+    def update(self, units, food, offsetY):
         self.counter += 1
 
         if (self.counter==self.speed):
@@ -242,7 +242,8 @@ class Unit:
 
             nextY = self.posY + DY[self.direction]
             nextX = self.posX + DX[self.direction]
-            if self.gameMap.is_valid(nextY, nextX) and abs(nextY-(TILE_BUFFER+TILE_HEIGHT)/2)<=15:
+
+            if self.gameMap.is_valid(nextY, nextX) and abs(self.posY-(gameMap.height/2-offsetY/16))<=14:
                 self.posY = nextY
                 self.posX = nextX
 
@@ -261,11 +262,11 @@ class Pacman(Unit):
         self.screen.listen()
         self.score = 0
 
-    def update(self, units, food: Food):
+    def update(self, units, food: Food, offsetY = None):
         if food.haveFood[self.posY][self.posX]:
             self.score += 1
             food.haveFood[self.posY][self.posX] = False
-        return super().update(units, food)
+        return super().update(units, food, offsetY)
 
     def go_left(self):  self.set_dir(0)
     def go_up(self):    self.set_dir(1)
@@ -278,7 +279,7 @@ class Blinky(Ghost):
     def __init__(self, posY, posX, color, gameMap, screen, speed):
         super().__init__(posY, posX, color, gameMap, screen, speed)
 
-    def update(self, units: dict[str, Unit] = None, food: Food = None):
+    def update(self, units: dict[str, Unit], food: Food, offsetY: int):
         """
         Blinky 的攻擊模式：不停地找到與 PacMan 的最短路徑，並朝著最短路徑
         """
@@ -312,8 +313,7 @@ class Blinky(Ghost):
                     argMi = i
 
         self.set_dir(argMi)
-        return super().update(units)
-
+        return super().update(units, food, offsetY)
 class Canva:
     def __init__(self, gameTable: GameMap, units: list[Unit], food: Food):
         reset()
@@ -330,6 +330,7 @@ class Canva:
 
     def _draw(self):
         reset()
+        hideturtle()
         # self._draw_axis()
         # self._draw_table()
 
@@ -357,6 +358,12 @@ class Canva:
             posY, posX = self._position(unit.posY, unit.posX)
             teleport(posX, posY)
             dot(20, unit.color)
+
+        # if self.gameMap.is_valid(nextY, nextX) and abs(nextY-((gameMap.height-offset)/2))<=14:
+        # print(f"half height: {gameMap.height/2}")
+        pencolor("#00FF00")
+        for i in range(gameMap.width):
+            self._draw_border(gameMap.height/2-self.offsetY/16, i, 0)
         update()
 
     def _position(self, mapY, mapX):
@@ -437,7 +444,7 @@ class Canva:
 
     def update(self):
         for unit in units.values():
-            unit.update(self.units, self.food)
+            unit.update(self.units, self.food, self.offsetY)
         canva.offsetY += SPEED
         if canva.offsetY==3*MAP_CELL_GAP:
             canva.offsetY = 0
@@ -491,6 +498,6 @@ if __name__ == "__main__":
     canva = Canva(gameMap, units, food)
     while True:
         canva.update()
-        print(f"score: {pacman.score}")
+        print(f"y: {pacman.posY} x: {pacman.posX} height: {gameMap.height}")
 
 input()
