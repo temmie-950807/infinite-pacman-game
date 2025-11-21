@@ -45,8 +45,6 @@ class Point:
     def __add__(self, other): return Point(self.y + other.y, self.x + other.x)
     def __sub__(self, other): return Point(self.y - other.y, self.x - other.x)
     def __mul__(self, scalar): return Point(self.y * scalar, self.x * scalar)
-    def __eq__(self, other): return  self.y == other.y and self.x == other.x
-    def __str__(self): return f"({self.y}, {self.x})"
     def distance_sq(self, other): return (self.y - other.y)**2 + (self.x - other.x)**2
 
 class Direction(Enum):
@@ -86,10 +84,10 @@ class TileTable:
         self.table[index] = value
 
     def is_inside(self, nowY, nowX):
-        return 0<=nowY and nowY<self.height and 0<=nowX and nowX<self.width
+        return 0<=nowY<self.height and 0<=nowX<self.width
     
     def is_inside_tmp(self, nowY, nowX):
-        return 0<=nowY and nowY<self.height_tmp and 0<=nowX and nowX<self.width_tmp
+        return 0<=nowY<self.height_tmp and 0<=nowX<self.width_tmp
 
     def generate_map(self, nowY, nowX, id):
         if nowY<2:
@@ -101,13 +99,9 @@ class TileTable:
         else:
             random.shuffle(BLOCK)
             for b in BLOCK:
-                isValid = True
-                for (offsetY, offsetX) in b:
-                    if (not self.is_inside_tmp(nowY+offsetY, nowX+offsetX)) or self.table_tmp[nowY+offsetY][nowX+offsetX]!=0:
-                        isValid = False
-                        break
+                check_points = [(nowY+dy, nowX+dx) for dy, dx in b]
 
-                if isValid:
+                if all(self.is_inside_tmp(y, x) and self.table_tmp[y][x]==0 for y, x in check_points):
                     for (offsetY, offsetX) in b:
                         self.table_tmp[nowY+offsetY][nowX+offsetX] = id
                     if self.generate_map(nowY-(nowX==0), (nowX-1)%self.width_tmp, id%200+1):
@@ -174,7 +168,8 @@ class GameMap:
         """
         return 0<=pos.y and pos.y<self.height and 0<=pos.x and pos.x<self.width and self.gameTable[pos.y][pos.x]!=1
     def fill(self, tileY1, tileX1, tileY2, tileX2):
-        tileY1, tileX1, tileY2, tileX2 = min(tileY1, tileY2), min(tileX1, tileX2), max(tileY1, tileY2), max(tileX1, tileX2)
+        tileY1, tileY2 = sorted((tileY1, tileY2))
+        tileX1, tileX2 = sorted((tileX1, tileX2))
         tileY1 = tileY1*3+3
         tileX1 = tileX1*3+3
         tileY2 = tileY2*3+3+1
@@ -189,19 +184,13 @@ class GameMap:
 class Food:
     def __init__(self, gameMap: GameMap):
         self.gameMap = gameMap
-        self.haveFood = copy.deepcopy(gameMap.gameTable)
-        for i in range(gameMap.height):
-            for j in range(gameMap.width):
-                self.haveFood[i][j] = not self.haveFood[i][j]
+        self.haveFood = [[not cell for cell in row] for row in gameMap.gameTable]
 
     def update_refresh(self):
         haveFoodTmp = [[True for _ in range(self.gameMap.width)] for __ in range(self.gameMap.height)]
 
-        del self.haveFood[-1]
-        del self.haveFood[-1]
-        del self.haveFood[-1]
-        for i in range(0, 3):
-            self.haveFood.insert(i, gameMap.gameTable[i][:])
+        new_rows = [[True] * self.gameMap.width for _ in range(3)]
+        self.haveFood = new_rows + self.haveFood[:-3]
         for i in range(0, 3):
             for j in range(gameMap.width):
                 self.haveFood[i][j] = [True for _ in range(gameMap.width)]
