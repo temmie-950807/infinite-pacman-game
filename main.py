@@ -247,6 +247,9 @@ class Unit:
                 self.posY = nextY
                 self.posX = nextX
 
+    def in_border(self, posY, offsetY):
+        return abs(posY-(self.gameMap.height/2-offsetY/16))<=14
+
     def set_dir(self, dir_code):
         self.direction = dir_code
 
@@ -277,16 +280,10 @@ class Ghost(Unit):
         self.targetY = -1
         self.targetX = -1
         super().__init__(posY, posX, color, gameMap, screen, speed)
-class Blinky(Ghost):
-    def __init__(self, posY, posX, color, gameMap, screen, speed):
-        super().__init__(posY, posX, color, gameMap, screen, speed)
 
-    def update(self, units: dict[str, Unit], food: Food, offsetY: int):
-        """
-        Blinky 的攻擊模式：不停地找到與 PacMan 的最短路徑，並朝著最短路徑
-        """
-        self.targetY = units["pacman"].posY
-        self.targetX = units["pacman"].posX
+    def get_next_direction(self, targetY, targetX, units, offsetY):
+        self.targetY = targetY
+        self.targetX = targetX
 
         qq = Queue()
         qq.put((self.targetY, self.targetX))
@@ -297,7 +294,7 @@ class Blinky(Ghost):
             nowY, nowX = qq.get()
             for i in range(4):
                 nextY, nextX = nowY+DY[i], nowX+DX[i]
-                if self.gameMap.is_valid(nextY, nextX) and dis[nextY][nextX]==-1:
+                if self.gameMap.is_valid(nextY, nextX) and self.in_border(nextY, offsetY) and dis[nextY][nextX]==-1:
                     dis[nextY][nextX] = dis[nowY][nowX]+1
                     qq.put((nextY, nextX))
         
@@ -305,7 +302,7 @@ class Blinky(Ghost):
         argMi = -1
         for i in range(4):
             nextY, nextX = self.posY+DY[i], self.posX+DX[i]
-            if self.gameMap.is_valid(nextY, nextX):
+            if self.gameMap.is_valid(nextY, nextX) and self.in_border(nextY, offsetY):
                 
                 if mi==-1:
                     mi = dis[nextY][nextX]
@@ -314,7 +311,18 @@ class Blinky(Ghost):
                     mi = dis[nextY][nextX]
                     argMi = i
 
-        self.set_dir(argMi)
+        return argMi
+        
+class Blinky(Ghost):
+    def __init__(self, posY, posX, color, gameMap, screen, speed):
+        super().__init__(posY, posX, color, gameMap, screen, speed)
+
+    def update(self, units: dict[str, Unit], food: Food, offsetY: int):
+        """
+        Blinky 的攻擊模式：不停地找到與 PacMan 的最短路徑，並朝著最短路徑
+        """
+        nextDirection = self.get_next_direction(units["pacman"].posY, units["pacman"].posX, units, offsetY)
+        self.set_dir(nextDirection)
         return super().update(units, food, offsetY)
 class Pinky(Ghost):
     def __init__(self, posY, posX, color, gameMap, screen, speed):
@@ -324,41 +332,15 @@ class Pinky(Ghost):
         """
         Pinky 的攻擊模式：不停地找到與 PacMan 面前四格的最短路徑，並朝著最短路徑移動
         """
-        self.targetY = units["pacman"].posY
-        self.targetX = units["pacman"].posX
+        targetY = units["pacman"].posY
+        targetX = units["pacman"].posX
         targetDir = units["pacman"].direction
         for i in range(1, 5):
-            if self.gameMap.is_valid(self.targetY+DY[targetDir], self.targetX+DX[targetDir]):
-                self.targetY += DY[targetDir]
-                self.targetX += DX[targetDir]
-
-        qq = Queue()
-        qq.put((self.targetY, self.targetX))
-        dis = [[-1 for _ in range(self.gameMap.width)] for __ in range(self.gameMap.height)]
-        dis[self.targetY][self.targetX] = 0
-
-        while not qq.empty():
-            nowY, nowX = qq.get()
-            for i in range(4):
-                nextY, nextX = nowY+DY[i], nowX+DX[i]
-                if self.gameMap.is_valid(nextY, nextX) and dis[nextY][nextX]==-1:
-                    dis[nextY][nextX] = dis[nowY][nowX]+1
-                    qq.put((nextY, nextX))
-        
-        mi = -1
-        argMi = -1
-        for i in range(4):
-            nextY, nextX = self.posY+DY[i], self.posX+DX[i]
-            if self.gameMap.is_valid(nextY, nextX):
-                
-                if mi==-1:
-                    mi = dis[nextY][nextX]
-                    argMi = i
-                elif dis[nextY][nextX]<mi:
-                    mi = dis[nextY][nextX]
-                    argMi = i
-
-        self.set_dir(argMi)
+            if self.gameMap.is_valid(targetY+DY[targetDir], targetX+DX[targetDir]) and self.in_border(targetY+DY[targetDir], offsetY):
+                targetY += DY[targetDir]
+                targetX += DX[targetDir]
+        nextDirection = self.get_next_direction(targetY, targetX, units, offsetY)
+        self.set_dir(nextDirection)
         return super().update(units, food, offsetY)
 class Canva:
     def __init__(self, gameTable: GameMap, units: list[Unit], food: Food):
