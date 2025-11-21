@@ -1,11 +1,10 @@
 import random
 from turtle import *
-import time
 from queue import Queue
 import copy
 
 TILE_BUFFER = 4
-TILE_HEIGHT = 12
+TILE_HEIGHT = 5
 TILE_WIDTH = 5
 BLOCK = [
     # 直線
@@ -35,7 +34,7 @@ DX = [-1, 0, 1, 0]
 DY = [0, -1, 0, 1]
 MAP_CELL_GAP = 16
 
-SPEED = 1
+SPEED = 1 # 越高越慢，必須是 3*MAP_CELL_GAP 的因數
 
 class TileTable:
     def __init__(self, height = TILE_HEIGHT + TILE_BUFFER, width = TILE_WIDTH):
@@ -195,6 +194,35 @@ class GameMap:
             print()
         print("hegiht:", self.height, "width:", self.width)
         print()
+class Food:
+    def __init__(self, gameMap: GameMap):
+        self.gameMap = gameMap
+        self.haveFood = copy.deepcopy(gameMap.gameTable)
+        for i in range(gameMap.height):
+            for j in range(gameMap.width):
+                self.haveFood[i][j] = not self.haveFood[i][j]
+
+    def update(self, units):
+        pass
+
+    def update_refresh(self):
+        haveFoodTmp = [[True for _ in range(self.gameMap.width)] for __ in range(self.gameMap.height)]
+
+        del self.haveFood[-1]
+        del self.haveFood[-1]
+        del self.haveFood[-1]
+        for i in range(0, 3):
+            self.haveFood.insert(i, gameMap.gameTable[i][:])
+        for i in range(0, 3):
+            for j in range(gameMap.width):
+                self.haveFood[i][j] = [True for _ in range(gameMap.width)]
+
+        for i in range(gameMap.height):
+            for j in range(gameMap.width):
+                if self.haveFood[i][j]==False:
+                    haveFoodTmp[i][j] = False
+
+        self.haveFood = copy.deepcopy(haveFoodTmp)
 class Unit:
     def __init__(self, posY, posX, color, gameMap: GameMap, screen, speed):
         self.posY = posY
@@ -206,21 +234,23 @@ class Unit:
         self.speed = speed
         self.counter = 0
 
-    def update(self, units):
+    def update(self, units = None, food = None):
         self.counter += 1
 
         if (self.counter==self.speed):
             self.counter = 0
-            if self.gameMap.is_valid(self.posY + DY[self.direction], self.posX + DX[self.direction]):
-                self.posY += DY[self.direction]
-                self.posX += DX[self.direction]
+
+            nextY = self.posY + DY[self.direction]
+            nextX = self.posX + DX[self.direction]
+            if self.gameMap.is_valid(nextY, nextX) and abs(nextY-(TILE_BUFFER+TILE_HEIGHT)/2)<=15:
+                self.posY = nextY
+                self.posX = nextX
 
     def set_dir(self, dir_code):
         self.direction = dir_code
 
     def update_refresh(self):
         self.posY += 3
-
 class Pacman(Unit):
     def __init__(self, posY, posX, color, gameMap, screen, speed):
         super().__init__(posY, posX, color, gameMap, screen, speed)
@@ -229,6 +259,13 @@ class Pacman(Unit):
         self.screen.onkeypress(self.go_right, "d")
         self.screen.onkeypress(self.go_down, "s")
         self.screen.listen()
+        self.score = 0
+
+    def update(self, units, food: Food):
+        if food.haveFood[self.posY][self.posX]:
+            self.score += 1
+            food.haveFood[self.posY][self.posX] = False
+        return super().update(units, food)
 
     def go_left(self):  self.set_dir(0)
     def go_up(self):    self.set_dir(1)
@@ -237,12 +274,11 @@ class Pacman(Unit):
 class Ghost(Unit):
     def __init__(self, posY, posX, color, gameMap, screen, speed):
         super().__init__(posY, posX, color, gameMap, screen, speed)
-
 class Blinky(Ghost):
     def __init__(self, posY, posX, color, gameMap, screen, speed):
         super().__init__(posY, posX, color, gameMap, screen, speed)
 
-    def update(self, units: dict[str, Unit]):
+    def update(self, units: dict[str, Unit] = None, food: Food = None):
         """
         Blinky 的攻擊模式：不停地找到與 PacMan 的最短路徑，並朝著最短路徑
         """
@@ -279,19 +315,30 @@ class Blinky(Ghost):
         return super().update(units)
 
 class Canva:
-    def __init__(self, gameTable: GameMap, units: list[Unit]):
+    def __init__(self, gameTable: GameMap, units: list[Unit], food: Food):
         reset()
         tracer(0, delay=None)
         speed(0)
         hideturtle()
+
+        bgcolor("#000000")
+
         self.gameTable = gameTable
-        self.offsetY = 0
         self.units = units
+        self.food = food
+        self.offsetY = 0
 
     def _draw(self):
         reset()
-        self._draw_axis()
-        self._draw_table()
+        # self._draw_axis()
+        # self._draw_table()
+
+        for i in range(self.gameTable.height):
+            for j in range(self.gameTable.width):
+                if self.food.haveFood[i][j]:
+                    posY, posX = self._position(i, j)
+                    teleport(posX, posY)
+                    dot(5, "white")
 
         fillcolor("#0000FF")
         for i in range(self.gameTable.height-1):
@@ -390,13 +437,14 @@ class Canva:
 
     def update(self):
         for unit in units.values():
-            unit.update(self.units)
+            unit.update(self.units, self.food)
         canva.offsetY += SPEED
         if canva.offsetY==3*MAP_CELL_GAP:
             canva.offsetY = 0
             for unit in units.values():
                 unit.update_refresh()
             self.gameTable.update_refresh()
+            self.food.update_refresh()
         self._draw()
 
 if __name__ == "__main__":
@@ -406,6 +454,7 @@ if __name__ == "__main__":
 
     tileTable = TileTable()
     gameMap = GameMap(tileTable)
+    food = Food(gameMap)
 
     pacman = Pacman(-1, -1, "yellow", gameMap, screen, 1)
     blinky = Blinky(-1, -1, "red", gameMap, screen, 2)
@@ -436,11 +485,12 @@ if __name__ == "__main__":
         "blinky": blinky,
         "inky": inky,
         "pinky": pinky,
-        "clyde": clyde
+        "clyde": clyde,
     }
 
-    canva = Canva(gameMap, units)
+    canva = Canva(gameMap, units, food)
     while True:
         canva.update()
+        print(f"score: {pacman.score}")
 
 input()
