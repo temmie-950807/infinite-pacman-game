@@ -4,6 +4,7 @@ from queue import Queue
 import copy
 from enum import Enum
 from dataclasses import dataclass
+import time
 
 TILE_BUFFER = 4
 TILE_HEIGHT = 12
@@ -233,9 +234,12 @@ class Pacman(Unit):
         self.screen.onkeypress(self.go_down, "s")
         self.screen.listen()
         self.score = 0
+        self.animation_counter = 0 # 0 1 2 3 4 5
 
     def move(self, food: Food, in_canva: callable):
         self.counter += 1
+        self.animation_counter += 1
+        self.animation_counter %= 6
         if (self.counter==self.speed):
             self.counter = 0
             nextPos = self.pos + self.direction.value
@@ -360,11 +364,6 @@ class Canva:
                     # 向下的長方形
                     self._draw_rectangle(i, j, i+1, j)
 
-        # 繪製 Pac-Man
-        pos = self._position(game.pacman.pos)
-        teleport(pos.x, pos.y)
-        dot(20, game.pacman.color)
-
         # 繪製鬼與鬼的目標格
         for ghost in self.ghosts:
             pos = self._position(ghost.pos)
@@ -372,6 +371,9 @@ class Canva:
             dot(20, ghost.color)
             pencolor(ghost.color)
             self._draw_target(ghost.targetPos)
+
+        # 繪製 Pac-Man
+        self._draw_pacman(game.pacman)
 
         # 繪製文字
         pencolor("white")
@@ -422,6 +424,7 @@ class Canva:
         """
         給定 table 的座標 mapPos，在裡面畫出目標點
         """
+        setheading(0)
         screenPos = self._position(mapPos)
         pensize(2)
         for x in [1, 5, 10]:
@@ -434,6 +437,44 @@ class Canva:
         goto(screenPos.x+15, screenPos.y)
         goto(screenPos.x-15, screenPos.y)
 
+    def _draw_pacman(self, pacman: Pacman):
+        screenPos = self._position(pacman.pos)
+        teleport(screenPos.x, screenPos.y)
+
+        if pacman.direction==Direction.LEFT:
+            setheading(180)
+        elif pacman.direction==Direction.UP:
+            setheading(270)
+        elif pacman.direction==Direction.RIGHT:
+            setheading(0)
+        elif pacman.direction==Direction.DOWN:
+            setheading(90)
+        else:
+            setheading(0)
+
+        print(heading())
+
+        deg = min(pacman.animation_counter, 6-pacman.animation_counter)*15
+        print(pacman.animation_counter, deg)
+        fillcolor(pacman.color)
+        penup()
+        begin_fill()
+        left(deg)
+        forward(10)
+        left(90)
+        circle(10, 360 - deg*2)
+        left(90)
+        forward(10)
+        end_fill()
+        pendown()
+
+        # 0 -> 0
+        # 1 -> 15
+        # 2 -> 30
+        # 3 -> 45
+        # 4 -> 30
+        # 5 -> 15
+        
 class Game:
     def __init__(self, gameMap: GameMap, pacman: Pacman, ghosts: list[Ghost], food: Food, canva: Canva):
         self.gameMap = gameMap
