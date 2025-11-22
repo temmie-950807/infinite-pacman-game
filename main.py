@@ -302,6 +302,16 @@ class Ghost(Unit):
                 self.previousPos = self.pos
                 self.pos = nextPos
 
+    def spawn(self, pacman: Pacman, upperBound: int, lowerBound: int):
+        """
+        鬼重生
+        """
+        if self.pos.y<upperBound or self.pos.y>lowerBound or not self.gameMap.is_valid(self.pos):
+            spawnPos = Point(-1, -1)
+            while spawnPos.distance_sq(pacman.pos)**0.5<8 or not self.gameMap.is_valid(spawnPos):
+                spawnPos = Point(random.randint(upperBound, lowerBound), random.randint(0, self.gameMap.width-1))
+            self.pos = spawnPos
+
     def get_target_position(self, pacman: Pacman, upperBound: int, lowerBound: int) -> Point:
         raise NotImplementedError()
 class Blinky(Ghost):
@@ -605,6 +615,7 @@ class Game:
 
         self.pacman.move(self.food, self.in_canva)
         for ghost in self.ghosts:
+            ghost.spawn(self.pacman, self.upperBound, self.lowerBound)
             ghost.update_speed(self.pacman)
             ghost.update_mode()
             ghost.think(self.pacman, self.upperBound, self.lowerBound)
@@ -630,18 +641,6 @@ if __name__ == "__main__":
         for j in range(gameMap.width):
             if pacman.pos==Point(-1, -1) and gameMap[i][j]==0:
                 pacman.pos = Point(i, j)
-
-            elif blinky.pos==Point(-1, -1) and gameMap[i][j]==0:
-                blinky.pos = Point(i, j)
-
-            elif inky.pos==Point(-1, -1) and gameMap[i][j]==0:
-                inky.pos = Point(i, j)
-
-            elif pinky.pos==Point(-1, -1) and gameMap[i][j]==0:
-                pinky.pos = Point(i, j)
-
-            elif clyde.pos==Point(-1, -1) and gameMap[i][j]==0:
-                clyde.pos = Point(i, j)
 
     ghosts = [blinky, inky, pinky, clyde]
     canva = Canva(gameMap, ghosts, food)
