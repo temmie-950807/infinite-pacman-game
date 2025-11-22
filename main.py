@@ -263,16 +263,14 @@ class Pacman(Unit):
     def go_right(self): self.set_dir(Direction.RIGHT)
     def go_down(self):  self.set_dir(Direction.DOWN)
 class Ghost(Unit):
-    def __init__(self, pos, color, gameMap, screen, speed):
+    def __init__(self, pos, color, gameMap, screen, speed, speedUp):
+        self.originalSpeed = speed
+        self.speedUp = speedUp
         self.targetPos = Point(-1, -1)
         self.previousPos = Point(-1, -1)
-        self.scoreRecord = 0
         self.mode = GhostMode.CHASE
         super().__init__(pos, color, gameMap, screen, speed)
 
-    def update_speed(self, pacman: Pacman):
-        raise NotImplementedError()
-    
     def update_mode(self):
         """
         在 SCATTER 模式下，與 target 距離 < 5 就會進入 CHASE mode
@@ -319,6 +317,18 @@ class Ghost(Unit):
                 self.previousPos = self.pos
                 self.pos = nextPos
 
+    def update_speed(self, pacman: Pacman):
+        previousSpeed = self.speed
+        match self.mode:
+            case GhostMode.CHASE:
+                self.speed = max(1, self.originalSpeed - pacman.score//self.speedUp)
+            case GhostMode.SCATTER:
+                self.speed = 4
+            case GhostMode.FREIGHT:
+                self.speed = 2
+        if self.speed != previousSpeed:
+            self.moveCounter = 0
+
     def spawn(self, pacman: Pacman, upperBound: int, lowerBound: int):
         """
         鬼重生
@@ -332,30 +342,15 @@ class Ghost(Unit):
     def get_target_position(self, pacman: Pacman, upperBound: int, lowerBound: int) -> Point:
         raise NotImplementedError()
 class Blinky(Ghost):
-    def __init__(self, pos, color, gameMap, screen, speed):
-        self.scoreRecord = 0
-        super().__init__(pos, color, gameMap, screen, speed)
-
     def get_target_position(self, pacman: Pacman, upperBound: int, lowerBound: int) -> Point:
         """
         Blinky 的攻擊模式：不停地找到與 PacMan 的最短路徑，並朝著最短路徑
         """
-        match(self.mode):
+        match self.mode:
             case GhostMode.CHASE:
                 return pacman.pos
-            case GhostMode.SCATTER:
+            case GhostMode.SCATTER | GhostMode.FREIGHT:
                 return Point(upperBound+2, self.gameMap.width-3) # 右上角
-            case GhostMode.FREIGHT:
-                return Point(upperBound+2, self.gameMap.width-3) # 右上角
-
-    def update_speed(self, pacman: Pacman):
-        """
-        每當分數多出 50，速度就會減少 1
-        """
-        if self.speed>1 and pacman.score>=self.scoreRecord+50:
-            self.scoreRecord = pacman.score
-            self.speed -= 1
-            self.moveCounter = 0
 class Pinky(Ghost):
     def get_target_position(self, pacman: Pacman, upperBound: int, lowerBound: int) -> Point:
         """
@@ -366,23 +361,13 @@ class Pinky(Ghost):
                 targetDir = pacman.direction
                 targetPos = pacman.pos + Direction(targetDir).value*4
                 return targetPos
-            case GhostMode.SCATTER:
-                return Point(upperBound+2, 2)  # 左上角
-            case GhostMode.FREIGHT:
+            case GhostMode.SCATTER | GhostMode.FREIGHT:
                 return Point(upperBound+2, 2)  # 左上角
         
-    def update_speed(self, pacman: Pacman):
-        """
-        每當分數多出 100，速度就會減少 1
-        """
-        if self.speed>1 and pacman.score>=self.scoreRecord+100:
-            self.scoreRecord = pacman.score
-            self.speed -= 1
-            self.moveCounter = 0
 class Inky(Ghost):
-    def __init__(self, pos: int, color: str, gameMap: GameMap, screen, speed: int, blinky: Blinky):
+    def __init__(self, pos: int, color: str, gameMap: GameMap, screen, speed: int, blinky: Blinky, speedUp):
         self.blinky = blinky
-        super().__init__(pos, color, gameMap, screen, speed)
+        super().__init__(pos, color, gameMap, screen, speed, speedUp)
 
     def get_target_position(self, pacman: Pacman, upperBound: int, lowerBound: int) -> Point:
         """
@@ -401,14 +386,6 @@ class Inky(Ghost):
             case GhostMode.FREIGHT:
                 return Point(lowerBound-2, self.gameMap.width-3)  # 右下角
     
-    def update_speed(self, pacman: Pacman):
-        """
-        每當分數多出 100，速度就會減少 1
-        """
-        if self.speed>1 and pacman.score>=self.scoreRecord+100:
-            self.scoreRecord = pacman.score
-            self.speed -= 1
-            self.moveCounter = 0
 class Clyde(Ghost):
     def get_target_position(self, pacman: Pacman, upperBound: int, lowerBound: int) -> Point:
         """
@@ -426,14 +403,6 @@ class Clyde(Ghost):
             case GhostMode.FREIGHT:
                 return Point(lowerBound-2, 2)  # 左下角
     
-    def update_speed(self, pacman: Pacman):
-        """
-        每當分數多出 100，速度就會減少 1
-        """
-        if self.speed>1 and pacman.score>=self.scoreRecord+100:
-            self.scoreRecord = pacman.score
-            self.speed -= 1
-            self.moveCounter = 0
 class Canva:
     def __init__(self, gameTable: GameMap, ghosts: list[Ghost], food: Food):
         reset()
@@ -689,10 +658,10 @@ if __name__ == "__main__":
     food = Food(gameMap)
 
     pacman = Pacman(Point(-1, -1), "yellow", gameMap, screen, 4)
-    blinky = Blinky(Point(-1, -1), "red", gameMap, screen, 8)
-    inky = Inky(Point(-1, -1), "cyan", gameMap, screen, 8, blinky)
-    pinky = Pinky(Point(-1, -1), "pink", gameMap, screen, 6)
-    clyde = Clyde(Point(-1, -1), "orange", gameMap, screen, 6)
+    blinky = Blinky(Point(-1, -1), "red", gameMap, screen, 8, 50)
+    inky = Inky(Point(-1, -1), "cyan", gameMap, screen, 8, blinky, 100)
+    pinky = Pinky(Point(-1, -1), "pink", gameMap, screen, 6, 100)
+    clyde = Clyde(Point(-1, -1), "orange", gameMap, screen, 6, 100)
     for i in range(gameMap.height//2, -1, -1):
         for j in range(gameMap.width):
             if pacman.pos==Point(-1, -1) and gameMap[i][j]==0:
