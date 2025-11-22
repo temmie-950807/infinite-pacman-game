@@ -35,7 +35,7 @@ DX = [-1, 0, 1, 0]
 DY = [0, -1, 0, 1]
 MAP_CELL_GAP = 16
 
-SPEED = 0.5 # 越高越快，必須是 3*MAP_CELL_GAP 的因數
+SPEED = 1 # 越高越快，必須是 3*MAP_CELL_GAP 的因數
 
 @dataclass
 class Point:
@@ -53,6 +53,10 @@ class GhostMode(Enum):
     CHASE = 1
     SCATTER = 2
     FREIGHT = 3
+
+class PacmanMode(Enum):
+    NORMAL = 1
+    POWERED_UP = 2
 
 class TileTable:
     def __init__(self, height = TILE_HEIGHT + TILE_BUFFER, width = TILE_WIDTH):
@@ -239,6 +243,7 @@ class Pacman(Unit):
         self.score = 0
         self.animationCounter = 0 # 0 1 2 3 4 5
         self.health = 3
+        self.mode = PacmanMode.POWERED_UP
 
     def move(self, food: Food, in_canva: callable):
         if food.haveFood[self.pos.y][self.pos.x]:
@@ -272,7 +277,9 @@ class Ghost(Unit):
         """
         在 SCATTER 模式下，與 target 距離 < 5 就會進入 CHASE mode
         """
-        if self.mode==GhostMode.SCATTER:
+        if pacman.mode==PacmanMode.POWERED_UP:
+            self.mode = GhostMode.FREIGHT
+        elif self.mode==GhostMode.SCATTER:
             if self.pos.distance_sq(self.targetPos)**0.5 < 5:
                 self.mode = GhostMode.CHASE
 
@@ -288,6 +295,8 @@ class Ghost(Unit):
 
         for dir in [Direction.LEFT, Direction.UP, Direction.RIGHT, Direction.DOWN]:
             nextPos = self.pos + dir.value
+            print(self.pos, dir.value, nextPos)
+            print(self.targetPos)
             if nextPos==self.previousPos:
                 continue
             if self.gameMap.is_valid(nextPos):
@@ -331,10 +340,13 @@ class Blinky(Ghost):
         """
         Blinky 的攻擊模式：不停地找到與 PacMan 的最短路徑，並朝著最短路徑
         """
-        if self.mode==GhostMode.CHASE:
-            return pacman.pos
-        if self.mode==GhostMode.SCATTER:
-            return Point(upperBound+2, self.gameMap.width-3) # 右上角
+        match(self.mode):
+            case GhostMode.CHASE:
+                return pacman.pos
+            case GhostMode.SCATTER:
+                return Point(upperBound+2, self.gameMap.width-3) # 右上角
+            case GhostMode.FREIGHT:
+                return Point(upperBound+2, self.gameMap.width-3) # 右上角
 
     def update_speed(self, pacman: Pacman):
         """
@@ -349,12 +361,15 @@ class Pinky(Ghost):
         """
         Pinky 的攻擊模式：不停地找到與 PacMan 面前四格的最短路徑，並朝著最短路徑移動
         """
-        if self.mode==GhostMode.CHASE:
-            targetDir = pacman.direction
-            targetPos = pacman.pos + Direction(targetDir).value*4
-            return targetPos
-        if self.mode==GhostMode.SCATTER:
-            return Point(upperBound+2, 2)  # 左上角
+        match(self.mode):
+            case GhostMode.CHASE:
+                targetDir = pacman.direction
+                targetPos = pacman.pos + Direction(targetDir).value*4
+                return targetPos
+            case GhostMode.SCATTER:
+                return Point(upperBound+2, 2)  # 左上角
+            case GhostMode.FREIGHT:
+                return Point(upperBound+2, 2)  # 左上角
         
     def update_speed(self, pacman: Pacman):
         """
@@ -373,15 +388,18 @@ class Inky(Ghost):
         """
         Inky 的攻擊模式：走向點 A（Blinky 的位置）與點 B（Pac-Man 的面前 2 兩格）的兩倍向量
         """
-        if self.mode==GhostMode.CHASE:
-            a = self.blinky.pos
-            b = pacman.pos
-            pacManDirection = pacman.direction
-            b = b+Direction(pacManDirection).value*2
-            targetPos = self.blinky.pos+(b-a)*2
-            return targetPos
-        if self.mode==GhostMode.SCATTER:
-            return Point(lowerBound-2, self.gameMap.width-3)  # 右下角
+        match(self.mode):
+            case GhostMode.CHASE:
+                a = self.blinky.pos
+                b = pacman.pos
+                pacManDirection = pacman.direction
+                b = b+Direction(pacManDirection).value*2
+                targetPos = self.blinky.pos+(b-a)*2
+                return targetPos
+            case GhostMode.SCATTER:
+                return Point(lowerBound-2, self.gameMap.width-3)  # 右下角
+            case GhostMode.FREIGHT:
+                return Point(lowerBound-2, self.gameMap.width-3)  # 右下角
     
     def update_speed(self, pacman: Pacman):
         """
@@ -396,14 +414,17 @@ class Clyde(Ghost):
         """
         Clyde 的攻擊模式：如果在 Pac-Man 8 格之外，則跟 Blinky 一樣攻擊，否則會退回左下角
         """
-        if self.mode==GhostMode.CHASE:
-            dist = self.pos.distance_sq(pacman.pos)**0.5
-            if dist>8:
-                return pacman.pos
-            else:
+        match(self.mode):
+            case GhostMode.CHASE:
+                dist = self.pos.distance_sq(pacman.pos)**0.5
+                if dist>8:
+                    return pacman.pos
+                else:
+                    return Point(lowerBound-2, 2)  # 左下角
+            case GhostMode.SCATTER:
                 return Point(lowerBound-2, 2)  # 左下角
-        if self.mode==GhostMode.SCATTER:
-            return Point(lowerBound-2, 2)  # 左下角
+            case GhostMode.FREIGHT:
+                return Point(lowerBound-2, 2)  # 左下角
     
     def update_speed(self, pacman: Pacman):
         """
@@ -525,7 +546,10 @@ class Canva:
         else:
             setheading(0)
 
-        dot(15, ghost.color)
+        if ghost.mode==GhostMode.FREIGHT:
+            dot(15, "blue")
+        else:
+            dot(15, ghost.color)
         pencolor("black")
         pensize(3)
         forward(7.5)
