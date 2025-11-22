@@ -209,16 +209,16 @@ class Unit:
         self.gameMap = gameMap
         self.screen = screen
         self.speed = speed
-        self.counter = 0
+        self.moveCounter = 0
         self.animation_counter = 0 # 0 1 2 3 4 5
 
     def move(self, in_canva: callable):
         self.animation_counter += 1
         self.animation_counter %= 6
 
-        self.counter += 1
-        if (self.counter==self.speed):
-            self.counter = 0
+        self.moveCounter += 1
+        if (self.moveCounter==self.speed):
+            self.moveCounter = 0
             nextPos = self.pos + self.direction.value
             if self.gameMap.is_valid(nextPos) and in_canva(nextPos):
                 self.pos = nextPos
@@ -257,14 +257,16 @@ class Ghost(Unit):
         self.mode = GhostMode.CHASE
         super().__init__(pos, color, gameMap, screen, speed)
 
-    def move(self, in_canva):
-        self.counter += 1
-        if (self.counter==self.speed):
-            self.counter = 0
-            nextPos = self.pos + self.direction.value
-            if self.gameMap.is_valid(nextPos) and in_canva(nextPos):
-                self.previousPos = self.pos
-                self.pos = nextPos
+    def update_speed(self, pacman: Pacman):
+        raise NotImplementedError()
+    
+    def update_mode(self):
+        """
+        在 SCATTER 模式下，與 target 距離 < 5 就會進入 CHASE mode
+        """
+        if self.mode==GhostMode.SCATTER:
+            if self.pos.distance_sq(self.targetPos)**0.5 < 5:
+                self.mode = GhostMode.CHASE
 
     def think(self, pacman: Pacman, upperBound: int, lowerBound: int):
         """
@@ -287,17 +289,18 @@ class Ghost(Unit):
                     bestDirection = dir
 
         self.set_dir(bestDirection)
-    
-    def update_speed(self, pacman: Pacman):
-        raise NotImplementedError()
-    
-    def update_mode(self):
+
+    def move(self, in_canva):
         """
-        在 SCATTER 模式下，與 target 距離 < 5 就會進入 CHASE mode
+        將鬼往 think 的方向前進一格
         """
-        if self.mode==GhostMode.SCATTER:
-            if self.pos.distance_sq(self.targetPos)**0.5 < 5:
-                self.mode = GhostMode.CHASE
+        self.moveCounter += 1
+        if (self.moveCounter==self.speed):
+            self.moveCounter = 0
+            nextPos = self.pos + self.direction.value
+            if self.gameMap.is_valid(nextPos) and in_canva(nextPos):
+                self.previousPos = self.pos
+                self.pos = nextPos
 
     def get_target_position(self, pacman: Pacman, upperBound: int, lowerBound: int) -> Point:
         raise NotImplementedError()
@@ -322,6 +325,7 @@ class Blinky(Ghost):
         if self.speed>1 and pacman.score>=self.scoreRecord+50:
             self.scoreRecord = pacman.score
             self.speed -= 1
+            self.moveCounter = 0
 class Pinky(Ghost):
     def get_target_position(self, pacman: Pacman, upperBound: int, lowerBound: int) -> Point:
         """
@@ -341,6 +345,7 @@ class Pinky(Ghost):
         if self.speed>1 and pacman.score>=self.scoreRecord+100:
             self.scoreRecord = pacman.score
             self.speed -= 1
+            self.moveCounter = 0
 class Inky(Ghost):
     def __init__(self, pos: int, color: str, gameMap: GameMap, screen, speed: int, blinky: Blinky):
         self.blinky = blinky
@@ -367,6 +372,7 @@ class Inky(Ghost):
         if self.speed>1 and pacman.score>=self.scoreRecord+100:
             self.scoreRecord = pacman.score
             self.speed -= 1
+            self.moveCounter = 0
 class Clyde(Ghost):
     def get_target_position(self, pacman: Pacman, upperBound: int, lowerBound: int) -> Point:
         """
@@ -374,7 +380,6 @@ class Clyde(Ghost):
         """
         if self.mode==GhostMode.CHASE:
             dist = self.pos.distance_sq(pacman.pos)**0.5
-            print(dist)
             if dist>8:
                 return pacman.pos
             else:
@@ -389,6 +394,7 @@ class Clyde(Ghost):
         if self.speed>1 and pacman.score>=self.scoreRecord+100:
             self.scoreRecord = pacman.score
             self.speed -= 1
+            self.moveCounter = 0
 class Canva:
     def __init__(self, gameTable: GameMap, ghosts: list[Ghost], food: Food):
         reset()
@@ -603,7 +609,6 @@ class Game:
             ghost.update_mode()
             ghost.think(self.pacman, self.upperBound, self.lowerBound)
             ghost.move(self.in_canva)
-        ghosts[0].update_speed(self.pacman)
 
         canva.draw(self.scrollOffset)
 
