@@ -238,6 +238,7 @@ class Pacman(Unit):
         self.screen.listen()
         self.score = 0
         self.animationCounter = 0 # 0 1 2 3 4 5
+        self.health = 3
 
     def move(self, food: Food, in_canva: callable):
         if food.haveFood[self.pos.y][self.pos.x]:
@@ -459,6 +460,8 @@ class Canva:
         write(f"Score: {game.pacman.score}", font=("Arial", 16, "normal"))
         teleport(10, SCREEN_HEIGHT-30)
         write(f"Speed: {game.ghosts[0].speed}", font=("Arial", 16, "normal"))
+        teleport(10, SCREEN_HEIGHT-50)
+        write(f"HP: {game.pacman.health}", font=("Arial", 16, "normal"))
 
         update()
 
@@ -587,6 +590,18 @@ class Game:
 
     def in_canva(self, mapPos: Point) -> bool:
         return self.canva.in_canva(mapPos)
+    
+    def check_collision(self):
+        for ghost in self.ghosts:
+            if ghost.pos==self.pacman.pos:
+                self.pacman.health -= 1
+                # 重生
+                ghost.pos = Point(-1, -1)
+                ghost.spawn(self.pacman, self.upperBound, self.lowerBound)
+
+        if self.pacman.health <= 0:
+            print("Game Over!")
+            exit()
 
     def update(self):
         self.gameModeCounter += 1
@@ -614,12 +629,17 @@ class Game:
                 break
 
         self.pacman.move(self.food, self.in_canva)
+
+        self.check_collision()
+
         for ghost in self.ghosts:
             ghost.spawn(self.pacman, self.upperBound, self.lowerBound)
             ghost.update_speed(self.pacman)
             ghost.update_mode()
             ghost.think(self.pacman, self.upperBound, self.lowerBound)
             ghost.move(self.in_canva)
+
+        self.check_collision()
 
         canva.draw(self.scrollOffset)
 
