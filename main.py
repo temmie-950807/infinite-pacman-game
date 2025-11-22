@@ -201,9 +201,11 @@ class Food:
     def update_refresh(self):
         new_rows = [[FoodType.NORMAL if self.gameMap[row][col]!=1 else FoodType.EMPTY for col in range(self.gameMap.width)] for row in range(3)]
         self.haveFood = new_rows + self.haveFood[:-3]
-        if random.randint(1, 100)<=1:
-            row = random.randint(0, 2)
-            col = random.randint(0, self.gameMap.width-1)
+        if random.randint(1, 100)<=50:
+            row, col = -1, -1
+            while gameMap.is_valid(Point(row, col)):
+                row = random.randint(0, 2)
+                col = random.randint(0, self.gameMap.width-1)
             new_rows[row][col] = FoodType.BIG
 
         for row in range(TILE_BUFFER):
@@ -247,16 +249,12 @@ class Pacman(Unit):
         self.screen.listen()
         self.score = 0
         self.animationCounter = 0 # 0 1 2 3 4 5
-        self.modeCounter = 0
         self.health = 3
-        self.mode = PacmanMode.POWERED_UP
+        self.mode = PacmanMode.NORMAL
 
     def update_mode(self):
         if pacman.mode==PacmanMode.POWERED_UP:
-            if self.modeCounter>0:
-                self.modeCounter -= 1
-            else:
-                self.mode = PacmanMode.NORMAL
+            self.mode = PacmanMode.NORMAL
 
     def move(self, food: Food, in_canva: callable):
         match food.haveFood[self.pos.y][self.pos.x]:
@@ -267,7 +265,6 @@ class Pacman(Unit):
                 food.haveFood[self.pos.y][self.pos.x] = FoodType.EMPTY
             case FoodType.BIG:
                 self.score += 5
-                self.modeCounter = 150
                 self.mode = PacmanMode.POWERED_UP
                 food.haveFood[self.pos.y][self.pos.x] = FoodType.EMPTY
             case FoodType.CHERRY:
@@ -276,11 +273,10 @@ class Pacman(Unit):
         super().move(in_canva)
 
     def spawn(self, ghosts , upperBound: int, lowerBound: int):
-        if self.pos.y<upperBound or self.pos.y>lowerBound or not self.gameMap.is_valid(self.pos):
-            spawnPos = Point(-1, -1)
-            while spawnPos.distance_sq(ghosts[0].pos)**0.5<8 or not self.gameMap.is_valid(spawnPos):
-                spawnPos = Point(random.randint(upperBound, lowerBound), random.randint(0, self.gameMap.width-1))
-            self.pos = spawnPos
+        spawnPos = Point(-1, -1)
+        while spawnPos.distance_sq(ghosts[0].pos)**0.5<8 or not self.gameMap.is_valid(spawnPos):
+            spawnPos = Point(random.randint(upperBound, lowerBound), random.randint(0, self.gameMap.width-1))
+        self.pos = spawnPos
 
     def go_left(self):  self.set_dir(Direction.LEFT)
     def go_up(self):    self.set_dir(Direction.UP)
@@ -293,17 +289,42 @@ class Ghost(Unit):
         self.targetPos = Point(-1, -1)
         self.previousPos = Point(-1, -1)
         self.mode = GhostMode.CHASE
+
+        self.freightCount = 0
+        self.scatterCount = 0
         super().__init__(pos, color, gameMap, screen, speed)
 
     def update_mode(self):
         """
         在 SCATTER 模式下，與 target 距離 < 5 就會進入 CHASE mode
         """
-        if pacman.mode==PacmanMode.POWERED_UP:
-            self.mode = GhostMode.FREIGHT
-        elif self.mode==GhostMode.SCATTER:
-            if self.pos.distance_sq(self.targetPos)**0.5 < 5:
-                self.mode = GhostMode.CHASE
+        match self.mode:
+            case GhostMode.CHASE:
+                if pacman.mode==PacmanMode.POWERED_UP:
+                    self.mode = GhostMode.FREIGHT
+                    self.freightCount = 150
+
+            case GhostMode.SCATTER:
+                if pacman.mode==PacmanMode.POWERED_UP:
+                    self.mode = GhostMode.FREIGHT
+                    self.scatterCount = 150
+
+                elif self.scatterCount==0:
+                    self.mode = GhostMode.CHASE
+
+                else:
+                    self.scatterCount -= 1
+
+            case GhostMode.FREIGHT:
+                if pacman.mode==PacmanMode.POWERED_UP:
+                    self.mode = GhostMode.FREIGHT
+                    self.freightCount = 150
+
+                elif self.freightCount==0:
+                    self.mode = GhostMode.CHASE
+
+                else:
+                    self.freightCount -= 1
 
     def think(self, pacman: Pacman, upperBound: int, lowerBound: int):
         """
@@ -355,6 +376,7 @@ class Ghost(Unit):
         """
         鬼重生
         """
+        self.mode = GhostMode.CHASE
         if self.pos.y<upperBound or self.pos.y>lowerBound or not self.gameMap.is_valid(self.pos):
             spawnPos = Point(-1, -1)
             while spawnPos.distance_sq(pacman.pos)**0.5<8 or not self.gameMap.is_valid(spawnPos):
@@ -491,6 +513,10 @@ class Canva:
         teleport(10, SCREEN_HEIGHT-50)
         write(f"HP: {game.pacman.health}", font=("Arial", 16, "normal"))
 
+        if self.ghosts[0].mode==GhostMode.FREIGHT:
+            teleport(10, SCREEN_HEIGHT-70)
+            write(f"POWER: {game.ghosts[0].freightCount}", font=("Arial", 16, "normal"))
+
         update()
 
     def in_canva(self, mapPos: Point) -> bool:
@@ -622,14 +648,23 @@ class Game:
     def in_canva(self, mapPos: Point) -> bool:
         return self.canva.in_canva(mapPos)
     
-    def check_collision(self):
+    def check_die(self):
+        # 檢查鬼的死亡
         for ghost in self.ghosts:
             if ghost.pos==self.pacman.pos:
-                self.pacman.health -= 1
-                # 重生
+                match ghost.mode:
+                    case GhostMode.CHASE | GhostMode.SCATTER:
+                        self.pacman.health -= 1
+                    case GhostMode.FREIGHT:
+                        self.pacman.score += 10
                 ghost.pos = Point(-1, -1)
                 ghost.spawn(self.pacman, self.upperBound, self.lowerBound)
 
+            if ghost.pos.y>self.lowerBound or ghost.pos.y<self.upperBound:
+                ghost.pos = Point(-1, -1)
+                ghost.spawn(self.pacman, self.upperBound, self.lowerBound)
+
+        # 檢查 Pac-Man 的死亡
         if self.pacman.pos.y>self.lowerBound or self.pacman.pos.y<self.upperBound:
             self.pacman.health -= 1
             pacman.pos = Point(-1, -1)
@@ -668,16 +703,15 @@ class Game:
         self.pacman.update_mode()
         self.pacman.move(self.food, self.in_canva)
 
-        self.check_collision()
+        self.check_die()
 
         for ghost in self.ghosts:
-            ghost.spawn(self.pacman, self.upperBound, self.lowerBound)
             ghost.update_speed(self.pacman)
             ghost.update_mode()
             ghost.think(self.pacman, self.upperBound, self.lowerBound)
             ghost.move(self.in_canva)
 
-        self.check_collision()
+        self.check_die()
 
         canva.draw(self.scrollOffset)
 
