@@ -58,6 +58,12 @@ class PacmanMode(Enum):
     NORMAL = 1
     POWERED_UP = 2
 
+class FoodType(Enum):
+    EMPTY = 0
+    NORMAL = 1
+    BIG = 2
+    CHERRY = 3
+
 class TileTable:
     def __init__(self, height = TILE_HEIGHT + TILE_BUFFER, width = TILE_WIDTH):
         self.table_tmp = [[0] * width for _ in range(height)]
@@ -188,23 +194,22 @@ class GameMap:
 class Food:
     def __init__(self, gameMap: GameMap):
         self.gameMap = gameMap
-        self.haveFood = [[not cell for cell in row] for row in gameMap.gameTable]
+        self.haveFood = [
+            [FoodType.EMPTY if cell==1 else (FoodType.BIG if random.randint(1, 100)<=1 else FoodType.NORMAL) for cell in row] for row in gameMap.gameTable
+        ]
 
     def update_refresh(self):
-        haveFoodTmp = [[True for _ in range(self.gameMap.width)] for __ in range(self.gameMap.height)]
-
-        new_rows = [[True] * self.gameMap.width for _ in range(3)]
+        new_rows = [[FoodType.NORMAL if self.gameMap[row][col]!=1 else FoodType.EMPTY for col in range(self.gameMap.width)] for row in range(3)]
         self.haveFood = new_rows + self.haveFood[:-3]
-        for i in range(0, 3):
-            for j in range(gameMap.width):
-                self.haveFood[i][j] = [True for _ in range(gameMap.width)]
+        if random.randint(1, 100)<=1:
+            row = random.randint(0, 2)
+            col = random.randint(0, self.gameMap.width-1)
+            new_rows[row][col] = FoodType.BIG
 
-        for i in range(gameMap.height):
-            for j in range(gameMap.width):
-                if self.haveFood[i][j]==False:
-                    haveFoodTmp[i][j] = False
-
-        self.haveFood = copy.deepcopy(haveFoodTmp)
+        for row in range(TILE_BUFFER):
+            for col in range(self.gameMap.width):
+                if self.haveFood[row][col]==FoodType.EMPTY and self.gameMap.is_valid(Point(row, col)):
+                    self.haveFood[row][col] = FoodType.NORMAL
 class Unit:
     def __init__(self, pos, color, gameMap: GameMap, screen, speed):
         self.pos = pos
@@ -242,13 +247,32 @@ class Pacman(Unit):
         self.screen.listen()
         self.score = 0
         self.animationCounter = 0 # 0 1 2 3 4 5
+        self.modeCounter = 0
         self.health = 3
         self.mode = PacmanMode.POWERED_UP
 
+    def update_mode(self):
+        if pacman.mode==PacmanMode.POWERED_UP:
+            if self.modeCounter>0:
+                self.modeCounter -= 1
+            else:
+                self.mode = PacmanMode.NORMAL
+
     def move(self, food: Food, in_canva: callable):
-        if food.haveFood[self.pos.y][self.pos.x]:
-            self.score += 1
-            food.haveFood[self.pos.y][self.pos.x] = False
+        match food.haveFood[self.pos.y][self.pos.x]:
+            case FoodType.EMPTY:
+                pass
+            case FoodType.NORMAL:
+                self.score += 1
+                food.haveFood[self.pos.y][self.pos.x] = FoodType.EMPTY
+            case FoodType.BIG:
+                self.score += 5
+                self.modeCounter = 150
+                self.mode = PacmanMode.POWERED_UP
+                food.haveFood[self.pos.y][self.pos.x] = FoodType.EMPTY
+            case FoodType.CHERRY:
+                self.score += 10
+                food.haveFood[self.pos.y][self.pos.x] = FoodType.EMPTY
         super().move(in_canva)
 
     def spawn(self, ghosts , upperBound: int, lowerBound: int):
@@ -293,8 +317,6 @@ class Ghost(Unit):
 
         for dir in [Direction.LEFT, Direction.UP, Direction.RIGHT, Direction.DOWN]:
             nextPos = self.pos + dir.value
-            print(self.pos, dir.value, nextPos)
-            print(self.targetPos)
             if nextPos==self.previousPos:
                 continue
             if self.gameMap.is_valid(nextPos):
@@ -421,12 +443,21 @@ class Canva:
         clear()
 
         # 繪製食物
-        for i in range(self.gameTable.height):
-            for j in range(self.gameTable.width):
-                if self.food.haveFood[i][j]:
-                    pos = self._position(Point(i, j))
-                    teleport(pos.x, pos.y)
-                    dot(5, "white")
+        for row in range(self.gameTable.height):
+            for col in range(self.gameTable.width):
+                pos = self._position(Point(row, col))
+                match self.food.haveFood[row][col]:
+                    case FoodType.EMPTY:
+                        pass
+                    case FoodType.NORMAL:
+                        teleport(pos.x, pos.y)
+                        dot(5, "white")
+                    case FoodType.BIG:
+                        teleport(pos.x, pos.y)
+                        dot(10, "white")
+                    case FoodType.CHERRY:
+                        teleport(pos.x, pos.y)
+                        dot(10, "red")
 
         # 繪製牆壁
         fillcolor("#0000FF")
@@ -624,6 +655,7 @@ class Game:
             self.gameMap.update_refresh()
             self.food.update_refresh()
 
+        # TODO use min logic shorten code here
         for i in range(gameMap.height):
             if self.in_canva(Point(i, 0)):
                 self.upperBound = i
@@ -632,7 +664,8 @@ class Game:
             if self.in_canva(Point(i, 0)):
                 self.lowerBound = i
                 break
-
+        
+        self.pacman.update_mode()
         self.pacman.move(self.food, self.in_canva)
 
         self.check_collision()
