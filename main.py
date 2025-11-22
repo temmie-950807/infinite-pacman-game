@@ -49,6 +49,11 @@ class Point:
 class Direction(Enum):
     LEFT, UP, RIGHT, DOWN, STOP = Point(0, -1), Point(-1, 0), Point(0, 1), Point(1, 0), Point(0, 0)
 
+class GhostMode(Enum):
+    CHASE = 1
+    SCATTER = 2
+    FREIGHT = 3
+
 class TileTable:
     def __init__(self, height = TILE_HEIGHT + TILE_BUFFER, width = TILE_WIDTH):
         self.table_tmp = [[0] * width for _ in range(height)]
@@ -259,11 +264,11 @@ class Ghost(Unit):
                 self.previousPos = self.pos
                 self.pos = nextPos
 
-    def think(self, pacman: Pacman):
+    def think(self, pacman: Pacman, mode: GhostMode, upperBound: int, lowerBound: int):
         """
         設定鬼要前進的下一個方向
         """
-        targetPos = self.get_target_position(pacman)
+        targetPos = self.get_target_position(pacman, mode, upperBound, lowerBound)
         self.targetPos = targetPos
 
         bestDirection = Direction.STOP
@@ -281,19 +286,22 @@ class Ghost(Unit):
 
         self.set_dir(bestDirection)
     
-    def get_target_position(self, pacman):
+    def get_target_position(self, pacman: Pacman, mode: GhostMode, upperBound: int, lowerBound: int) -> Point:
         raise NotImplementedError()
 class Blinky(Ghost):
     def __init__(self, pos, color, gameMap, screen, speed):
         self.scoreRecord = 0
         super().__init__(pos, color, gameMap, screen, speed)
-    def get_target_position(self, pacman: Pacman):
+    def get_target_position(self, pacman: Pacman, mode: GhostMode, upperBound: int, lowerBound: int) -> Point:
         """
         Blinky 的攻擊模式：不停地找到與 PacMan 的最短路徑，並朝著最短路徑
         """
-        return pacman.pos
+        if mode==GhostMode.CHASE:
+            return pacman.pos
+        if mode==GhostMode.SCATTER:
+            return Point(upperBound+2, self.gameMap.width-3) # 右上角
 
-    def update_the_speed(self, pacman: Pacman):
+    def update_speed(self, pacman: Pacman):
         """
         每當分數多出 50，速度就會減少 1
         """
@@ -301,39 +309,48 @@ class Blinky(Ghost):
             self.scoreRecord = pacman.score
             self.speed -= 1
 class Pinky(Ghost):
-    def get_target_position(self, pacman: Pacman):
+    def get_target_position(self, pacman: Pacman, mode: GhostMode, upperBound: int, lowerBound: int) -> Point:
         """
         Pinky 的攻擊模式：不停地找到與 PacMan 面前四格的最短路徑，並朝著最短路徑移動
         """
-        targetDir = pacman.direction
-        targetPos = pacman.pos + Direction(targetDir).value*4
-        return targetPos
+        if mode==GhostMode.CHASE:
+            targetDir = pacman.direction
+            targetPos = pacman.pos + Direction(targetDir).value*4
+            return targetPos
+        if mode==GhostMode.SCATTER:
+            return Point(upperBound+2, 2)  # 左上角
 class Inky(Ghost):
     def __init__(self, pos: int, color: str, gameMap: GameMap, screen, speed: int, blinky: Blinky):
         self.blinky = blinky
         super().__init__(pos, color, gameMap, screen, speed)
 
-    def get_target_position(self, pacman: Pacman):
+    def get_target_position(self, pacman: Pacman, mode: GhostMode, upperBound: int, lowerBound: int) -> Point:
         """
         Inky 的攻擊模式：走向點 A（Blinky 的位置）與點 B（Pac-Man 的面前 2 兩格）的兩倍向量
         """
-        a = self.blinky.pos
-        b = pacman.pos
-        pacManDirection = pacman.direction
-        b = b+Direction(pacManDirection).value*2
-        targetPos = self.blinky.pos+(b-a)*2
-        return targetPos
+        if mode==GhostMode.CHASE:
+            a = self.blinky.pos
+            b = pacman.pos
+            pacManDirection = pacman.direction
+            b = b+Direction(pacManDirection).value*2
+            targetPos = self.blinky.pos+(b-a)*2
+            return targetPos
+        if mode==GhostMode.SCATTER:
+            return Point(lowerBound-2, self.gameMap.width-3)  # 右下角
 class Clyde(Ghost):
-    def get_target_position(self, pacman: Pacman):
+    def get_target_position(self, pacman: Pacman, mode: GhostMode, upperBound: int, lowerBound: int) -> Point:
         """
         Clyde 的攻擊模式：如果在 Pac-Man 8 格之外，則跟 Blinky 一樣攻擊，否則會退回左下角
         """
-        dist = self.pos.distance_sq(pacman.pos)**0.5
-        if dist>8:
-            targetPos = pacman.pos
-        else:
-            targetPos = Point(self.gameMap.height/2+10, 2)  # 左下角
-        return targetPos
+        if mode==GhostMode.CHASE:
+            dist = self.pos.distance_sq(pacman.pos)**0.5
+            print(dist)
+            if dist>8:
+                return pacman.pos
+            else:
+                return Point(lowerBound-2, 2)  # 左下角
+        if mode==GhostMode.SCATTER:
+            return Point(lowerBound-2, 2)  # 左下角
 class Canva:
     def __init__(self, gameTable: GameMap, ghosts: list[Ghost], food: Food):
         reset()
@@ -388,6 +405,8 @@ class Canva:
         write(f"Score: {game.pacman.score}", font=("Arial", 16, "normal"))
         teleport(10, SCREEN_HEIGHT-30)
         write(f"Speed: {game.ghosts[0].speed}", font=("Arial", 16, "normal"))
+        teleport(10, SCREEN_HEIGHT-50)
+        write(f"Mode: {game.mode}", font=("Arial", 16, "normal"))
 
         update()
 
@@ -510,15 +529,22 @@ class Game:
         self.canva = canva
         self.scrollOffset = 0
 
+        self.upperBound = 0
+        self.lowerBound = 0
+        self.mode = GhostMode.CHASE
+        self.gameModeCounter = 0
+
     def in_canva(self, mapPos: Point) -> bool:
         return self.canva.in_canva(mapPos)
 
     def update(self):
-        self.pacman.move(self.food, self.in_canva)
-        for ghost in self.ghosts:
-            ghost.think(self.pacman)
-            ghost.move(self.in_canva)
-        ghosts[0].update_the_speed(self.pacman)
+        self.gameModeCounter += 1
+        if self.gameModeCounter==600:
+            self.gameModeCounter = 0
+            if self.mode==GhostMode.CHASE:
+                self.mode = GhostMode.SCATTER
+            else:
+                self.mode = GhostMode.CHASE
 
         self.scrollOffset += SPEED
         if self.scrollOffset == 3*MAP_CELL_GAP:
@@ -528,6 +554,21 @@ class Game:
                 ghost.update_refresh()
             self.gameMap.update_refresh()
             self.food.update_refresh()
+
+        for i in range(gameMap.height):
+            if self.in_canva(Point(i, 0)):
+                self.upperBound = i
+                break
+        for i in range(gameMap.height-1, -1, -1):
+            if self.in_canva(Point(i, 0)):
+                self.lowerBound = i
+                break
+
+        self.pacman.move(self.food, self.in_canva)
+        for ghost in self.ghosts:
+            ghost.think(self.pacman, self.mode, self.upperBound, self.lowerBound)
+            ghost.move(self.in_canva)
+        ghosts[0].update_speed(self.pacman)
 
         canva.draw(self.scrollOffset)
 
