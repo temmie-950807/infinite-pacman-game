@@ -54,6 +54,7 @@ class GhostMode(Enum):
     CHASE = 1
     SCATTER = 2
     FREIGHT = 3
+    DIE = 4
 
 class PacmanMode(Enum):
     NORMAL = 1
@@ -327,6 +328,10 @@ class Ghost(Unit):
                 else:
                     self.freightCount -= 1
 
+            case GhostMode.DIE:
+                if self.pos==self.targetPos:
+                    self.mode = GhostMode.CHASE
+
     def think(self, pacman: Pacman, upperBound: int, lowerBound: int):
         """
         設定鬼要前進的下一個方向
@@ -385,7 +390,7 @@ class Ghost(Unit):
         if (self.moveCounter==self.speed):
             self.moveCounter = 0
             nextPos = self.pos + self.direction.value
-            if self.gameMap.is_valid(nextPos) and in_canva(nextPos):
+            if self.gameMap.is_valid(nextPos) and (in_canva(nextPos) or self.mode==GhostMode.DIE):
                 self.previousPos = self.pos
                 self.pos = nextPos
 
@@ -398,6 +403,8 @@ class Ghost(Unit):
                 self.speed = 4
             case GhostMode.FREIGHT:
                 self.speed = 2
+            case GhostMode.DIE:
+                self.speed = 1
         if self.speed != previousSpeed:
             self.moveCounter = 0
 
@@ -405,12 +412,15 @@ class Ghost(Unit):
         """
         鬼重生
         """
-        self.mode = GhostMode.CHASE
-        if self.pos.y<upperBound or self.pos.y>lowerBound or not self.gameMap.is_valid(self.pos):
-            spawnPos = Point(-1, -1)
-            while spawnPos.distance_sq(pacman.pos)**0.5<8 or not self.gameMap.is_valid(spawnPos):
-                spawnPos = Point(random.randint(upperBound, lowerBound), random.randint(0, self.gameMap.width-1))
-            self.pos = spawnPos
+        spawnPos = Point(-1, -1)
+        while spawnPos.distance_sq(pacman.pos)**0.5<8 or not self.gameMap.is_valid(spawnPos):
+            spawnPos = Point(random.randint(upperBound, lowerBound), random.randint(0, self.gameMap.width-1))
+        self.targetPos = spawnPos
+
+    def update_refresh(self):
+        if self.mode==GhostMode.DIE:
+            self.targetPos.y += 3
+        super().update_refresh()
 
     def get_target_position(self, pacman: Pacman, upperBound: int, lowerBound: int) -> Point:
         raise NotImplementedError()
@@ -423,7 +433,9 @@ class Blinky(Ghost):
             case GhostMode.CHASE:
                 return pacman.pos
             case GhostMode.SCATTER | GhostMode.FREIGHT:
-                return Point(upperBound+2, self.gameMap.width-3) # 右上角
+                return Point(upperBound+4, self.gameMap.width-3) # 右上角
+            case GhostMode.DIE:
+                return self.targetPos
 class Pinky(Ghost):
     def get_target_position(self, pacman: Pacman, upperBound: int, lowerBound: int) -> Point:
         """
@@ -435,7 +447,9 @@ class Pinky(Ghost):
                 targetPos = pacman.pos + Direction(targetDir).value*4
                 return targetPos
             case GhostMode.SCATTER | GhostMode.FREIGHT:
-                return Point(upperBound+2, 2)  # 左上角
+                return Point(upperBound+4, 2)  # 左上角
+            case GhostMode.DIE:
+                return self.targetPos
         
 class Inky(Ghost):
     def __init__(self, pos: int, color: str, gameMap: GameMap, screen, speed: int, blinky: Blinky, speedUp):
@@ -454,10 +468,10 @@ class Inky(Ghost):
                 b = b+Direction(pacManDirection).value*2
                 targetPos = self.blinky.pos+(b-a)*2
                 return targetPos
-            case GhostMode.SCATTER:
-                return Point(lowerBound-2, self.gameMap.width-3)  # 右下角
-            case GhostMode.FREIGHT:
-                return Point(lowerBound-2, self.gameMap.width-3)  # 右下角
+            case GhostMode.SCATTER | GhostMode.FREIGHT:
+                return Point(lowerBound-4, self.gameMap.width-3)  # 右下角
+            case GhostMode.DIE:
+                return self.targetPos
     
 class Clyde(Ghost):
     def get_target_position(self, pacman: Pacman, upperBound: int, lowerBound: int) -> Point:
@@ -470,11 +484,11 @@ class Clyde(Ghost):
                 if dist>8:
                     return pacman.pos
                 else:
-                    return Point(lowerBound-2, 2)  # 左下角
-            case GhostMode.SCATTER:
-                return Point(lowerBound-2, 2)  # 左下角
-            case GhostMode.FREIGHT:
-                return Point(lowerBound-2, 2)  # 左下角
+                    return Point(lowerBound-4, 2)  # 左下角
+            case GhostMode.SCATTER | GhostMode.FREIGHT:
+                return Point(lowerBound-4, 2)  # 左下角
+            case GhostMode.DIE:
+                return self.targetPos
     
 class Canva:
     def __init__(self, gameTable: GameMap, ghosts: list[Ghost], food: Food):
@@ -601,10 +615,13 @@ class Canva:
         else:
             setheading(0)
 
-        if ghost.mode==GhostMode.FREIGHT:
-            dot(15, "blue")
-        else:
-            dot(15, ghost.color)
+        match ghost.mode:
+            case GhostMode.CHASE | GhostMode.SCATTER:
+                dot(15, ghost.color)
+            case GhostMode.FREIGHT:
+                dot(15, "blue")
+            case GhostMode.DIE:
+                dot(15, "gray")
         pencolor("black")
         pensize(3)
         forward(7.5)
@@ -680,17 +697,18 @@ class Game:
     def check_die(self):
         # 檢查鬼的死亡
         for ghost in self.ghosts:
+            if ghost.mode==GhostMode.DIE:
+                continue
             if ghost.pos==self.pacman.pos:
                 match ghost.mode:
                     case GhostMode.CHASE | GhostMode.SCATTER:
                         self.pacman.health -= 1
                     case GhostMode.FREIGHT:
                         self.pacman.score += 10
-                ghost.pos = Point(-1, -1)
+                ghost.mode = GhostMode.DIE
                 ghost.spawn(self.pacman, self.upperBound, self.lowerBound)
-
             if ghost.pos.y>self.lowerBound or ghost.pos.y<self.upperBound:
-                ghost.pos = Point(-1, -1)
+                ghost.mode = GhostMode.DIE
                 ghost.spawn(self.pacman, self.upperBound, self.lowerBound)
 
         # 檢查 Pac-Man 的死亡
@@ -762,6 +780,12 @@ if __name__ == "__main__":
         for j in range(gameMap.width):
             if pacman.pos==Point(-1, -1) and gameMap[i][j]==0:
                 pacman.pos = Point(i, j)
+            elif blinky.pos==Point(-1, -1) and gameMap[i][j]==0:
+                blinky.pos = Point(i, j)
+                inky.pos = Point(i, j)
+                pinky.pos = Point(i, j)
+                clyde.pos = Point(i, j)
+
 
     ghosts = [blinky, inky, pinky, clyde]
     canva = Canva(gameMap, ghosts, food)
