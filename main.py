@@ -210,11 +210,11 @@ class Unit:
         self.screen = screen
         self.speed = speed
         self.moveCounter = 0
-        self.animation_counter = 0 # 0 1 2 3 4 5
+        self.animationCounter = 0 # 0 1 2 3 4 5
 
     def move(self, in_canva: callable):
-        self.animation_counter += 1
-        self.animation_counter %= 6
+        self.animationCounter += 1
+        self.animationCounter %= 6
 
         self.moveCounter += 1
         if (self.moveCounter==self.speed):
@@ -237,7 +237,7 @@ class Pacman(Unit):
         self.screen.onkeypress(self.go_down, "s")
         self.screen.listen()
         self.score = 0
-        self.animation_counter = 0 # 0 1 2 3 4 5
+        self.animationCounter = 0 # 0 1 2 3 4 5
 
     def move(self, food: Food, in_canva: callable):
         if food.haveFood[self.pos.y][self.pos.x]:
@@ -542,7 +542,7 @@ class Canva:
         else:
             setheading(0)
 
-        deg = min(pacman.animation_counter, 6-pacman.animation_counter)*15
+        deg = min(pacman.animationCounter, 6-pacman.animationCounter)*15
         fillcolor(pacman.color)
         penup()
         begin_fill()
