@@ -1,10 +1,8 @@
 import random
 from turtle import *
-from queue import Queue
 import copy
 from enum import Enum
 from dataclasses import dataclass
-import time
 
 TILE_BUFFER = 4
 TILE_HEIGHT = 12
@@ -37,7 +35,7 @@ DX = [-1, 0, 1, 0]
 DY = [0, -1, 0, 1]
 MAP_CELL_GAP = 16
 
-SPEED = 1 # 越高越快，必須是 3*MAP_CELL_GAP 的因數
+SPEED = 2 # 越高越快，必須是 3*MAP_CELL_GAP 的因數
 
 @dataclass
 class Point:
@@ -286,11 +284,20 @@ class Ghost(Unit):
     def get_target_position(self, pacman):
         raise NotImplementedError()
 class Blinky(Ghost):
+    def __init__(self, pos, color, gameMap, screen, speed):
+        self.originalSpeed = speed
+        super().__init__(pos, color, gameMap, screen, speed)
     def get_target_position(self, pacman: Pacman):
         """
         Blinky 的攻擊模式：不停地找到與 PacMan 的最短路徑，並朝著最短路徑
         """
         return pacman.pos
+
+    def update_the_speed(self, pacman: Pacman):
+        """
+        每當分數多出 50，速度就會增加 1
+        """
+        self.speed = max(1, self.originalSpeed - pacman.score//50)
 class Pinky(Ghost):
     def get_target_position(self, pacman: Pacman):
         """
@@ -379,6 +386,8 @@ class Canva:
         pencolor("white")
         teleport(10, SCREEN_HEIGHT-10)
         write(f"Score: {game.pacman.score}", font=("Arial", 16, "normal"))
+        teleport(10, SCREEN_HEIGHT-30)
+        write(f"Speed: {game.ghosts[0].speed}", font=("Arial", 16, "normal"))
 
         update()
 
@@ -492,6 +501,7 @@ class Game:
         for ghost in self.ghosts:
             ghost.think(self.pacman)
             ghost.move(self.in_canva)
+        ghosts[0].update_the_speed(self.pacman)
 
         self.scrollOffset += SPEED
         if self.scrollOffset == 3*MAP_CELL_GAP:
@@ -513,11 +523,11 @@ if __name__ == "__main__":
     gameMap = GameMap(tileTable)
     food = Food(gameMap)
 
-    pacman = Pacman(Point(-1, -1), "yellow", gameMap, screen, 2)
-    blinky = Blinky(Point(-1, -1), "red", gameMap, screen, 4)
-    inky = Inky(Point(-1, -1), "cyan", gameMap, screen, 4, blinky)
-    pinky = Pinky(Point(-1, -1), "pink", gameMap, screen, 4)
-    clyde = Clyde(Point(-1, -1), "orange", gameMap, screen, 4)
+    pacman = Pacman(Point(-1, -1), "yellow", gameMap, screen, 4)
+    blinky = Blinky(Point(-1, -1), "red", gameMap, screen, 8)
+    inky = Inky(Point(-1, -1), "cyan", gameMap, screen, 8, blinky)
+    pinky = Pinky(Point(-1, -1), "pink", gameMap, screen, 8)
+    clyde = Clyde(Point(-1, -1), "orange", gameMap, screen, 8)
     for i in range(gameMap.height//2, -1, -1):
         for j in range(gameMap.width):
             if pacman.pos==Point(-1, -1) and gameMap[i][j]==0:
