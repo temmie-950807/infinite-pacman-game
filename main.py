@@ -246,6 +246,13 @@ class Pacman(Unit):
             food.haveFood[self.pos.y][self.pos.x] = False
         super().move(in_canva)
 
+    def spawn(self, ghosts , upperBound: int, lowerBound: int):
+        if self.pos.y<upperBound or self.pos.y>lowerBound or not self.gameMap.is_valid(self.pos):
+            spawnPos = Point(-1, -1)
+            while spawnPos.distance_sq(ghosts[0].pos)**0.5<8 or not self.gameMap.is_valid(spawnPos):
+                spawnPos = Point(random.randint(upperBound, lowerBound), random.randint(0, self.gameMap.width-1))
+            self.pos = spawnPos
+
     def go_left(self):  self.set_dir(Direction.LEFT)
     def go_up(self):    self.set_dir(Direction.UP)
     def go_right(self): self.set_dir(Direction.RIGHT)
@@ -598,6 +605,11 @@ class Game:
                 # 重生
                 ghost.pos = Point(-1, -1)
                 ghost.spawn(self.pacman, self.upperBound, self.lowerBound)
+
+        if self.pacman.pos.y>self.lowerBound or self.pacman.pos.y<self.upperBound:
+            self.pacman.health -= 1
+            pacman.pos = Point(-1, -1)
+            pacman.spawn(self.ghosts, self.upperBound, self.lowerBound)
 
         if self.pacman.health <= 0:
             print("Game Over!")
