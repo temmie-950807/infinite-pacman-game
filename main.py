@@ -3,6 +3,7 @@ from turtle import *
 import copy
 from enum import Enum
 from dataclasses import dataclass
+from queue import Queue
 
 TILE_BUFFER = 5
 TILE_HEIGHT = 12
@@ -336,15 +337,43 @@ class Ghost(Unit):
         bestDirection = Direction.STOP
         minDistance = float("inf")
 
-        for dir in [Direction.LEFT, Direction.UP, Direction.RIGHT, Direction.DOWN]:
-            nextPos = self.pos + dir.value
-            if nextPos==self.previousPos:
-                continue
-            if self.gameMap.is_valid(nextPos):
-                dis = self.targetPos.distance_sq(nextPos)
-                if dis<minDistance:
-                    minDistance = dis
-                    bestDirection = dir
+        if self.gameMap.is_valid(targetPos):
+            que = Queue()
+            que.put(targetPos)
+            bfsDis = [[-1 for col in range(self.gameMap.width)] for row in range(self.gameMap.height)]
+            bfsDis[targetPos.y][targetPos.x] = 0
+
+            while not que.empty():
+                nowPos = que.get()
+
+                for dir in [Direction.LEFT, Direction.UP, Direction.RIGHT, Direction.DOWN]:
+                    nextPos = nowPos + dir.value
+                    if nextPos==self.previousPos:
+                        continue
+                    if self.gameMap.is_valid(nextPos) and bfsDis[nextPos.y][nextPos.x]==-1:
+                        bfsDis[nextPos.y][nextPos.x] = bfsDis[nowPos.y][nowPos.x]+1
+                        que.put(nextPos)
+
+            for dir in [Direction.LEFT, Direction.UP, Direction.RIGHT, Direction.DOWN]:
+                nextPos = self.pos + dir.value
+                if nextPos==self.previousPos:
+                    continue
+                if self.gameMap.is_valid(nextPos):
+                    dis = bfsDis[nextPos.y][nextPos.x]
+                    if dis<minDistance:
+                        minDistance = dis
+                        bestDirection = dir
+
+        else:
+            for dir in [Direction.LEFT, Direction.UP, Direction.RIGHT, Direction.DOWN]:
+                nextPos = self.pos + dir.value
+                if nextPos==self.previousPos:
+                    continue
+                if self.gameMap.is_valid(nextPos):
+                    dis = self.targetPos.distance_sq(nextPos)
+                    if dis<minDistance:
+                        minDistance = dis
+                        bestDirection = dir
 
         self.set_dir(bestDirection)
 
