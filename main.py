@@ -4,7 +4,7 @@ import copy
 from enum import Enum
 from dataclasses import dataclass
 
-TILE_BUFFER = 4
+TILE_BUFFER = 5
 TILE_HEIGHT = 12
 TILE_WIDTH = 4
 BLOCK = [
@@ -35,7 +35,7 @@ DX = [-1, 0, 1, 0]
 DY = [0, -1, 0, 1]
 MAP_CELL_GAP = 16
 
-SPEED = 2 # 越高越快，必須是 3*MAP_CELL_GAP 的因數
+SPEED = 0.5 # 越高越快，必須是 3*MAP_CELL_GAP 的因數
 
 @dataclass
 class Point:
@@ -209,8 +209,12 @@ class Unit:
         self.screen = screen
         self.speed = speed
         self.counter = 0
+        self.animation_counter = 0 # 0 1 2 3 4 5
 
     def move(self, in_canva: callable):
+        self.animation_counter += 1
+        self.animation_counter %= 6
+
         self.counter += 1
         if (self.counter==self.speed):
             self.counter = 0
@@ -235,18 +239,10 @@ class Pacman(Unit):
         self.animation_counter = 0 # 0 1 2 3 4 5
 
     def move(self, food: Food, in_canva: callable):
-        self.counter += 1
-        self.animation_counter += 1
-        self.animation_counter %= 6
-        if (self.counter==self.speed):
-            self.counter = 0
-            nextPos = self.pos + self.direction.value
-            if self.gameMap.is_valid(nextPos) and in_canva(nextPos):
-                self.pos = nextPos
-
         if food.haveFood[self.pos.y][self.pos.x]:
             self.score += 1
             food.haveFood[self.pos.y][self.pos.x] = False
+        super().move(in_canva)
 
     def go_left(self):  self.set_dir(Direction.LEFT)
     def go_up(self):    self.set_dir(Direction.UP)
@@ -285,7 +281,7 @@ class Ghost(Unit):
         raise NotImplementedError()
 class Blinky(Ghost):
     def __init__(self, pos, color, gameMap, screen, speed):
-        self.originalSpeed = speed
+        self.scoreRecord = 0
         super().__init__(pos, color, gameMap, screen, speed)
     def get_target_position(self, pacman: Pacman):
         """
@@ -295,9 +291,11 @@ class Blinky(Ghost):
 
     def update_the_speed(self, pacman: Pacman):
         """
-        每當分數多出 50，速度就會增加 1
+        每當分數多出 50，速度就會減少 1
         """
-        self.speed = max(1, self.originalSpeed - pacman.score//50)
+        if self.speed>1 and pacman.score>=self.scoreRecord+50:
+            self.scoreRecord = pacman.score
+            self.speed -= 1
 class Pinky(Ghost):
     def get_target_position(self, pacman: Pacman):
         """
@@ -373,9 +371,7 @@ class Canva:
 
         # 繪製鬼與鬼的目標格
         for ghost in self.ghosts:
-            pos = self._position(ghost.pos)
-            teleport(pos.x, pos.y)
-            dot(20, ghost.color)
+            self._draw_ghost(ghost)
             pencolor(ghost.color)
             self._draw_target(ghost.targetPos)
 
@@ -429,6 +425,26 @@ class Canva:
         goto(screen1.x, screen1.y)
         end_fill()
 
+    def _draw_ghost(self, ghost: Pacman):
+        screenPos = self._position(ghost.pos)
+        teleport(screenPos.x, screenPos.y)
+
+        if ghost.direction==Direction.LEFT:
+            setheading(180)
+        elif ghost.direction==Direction.UP:
+            setheading(270)
+        elif ghost.direction==Direction.RIGHT:
+            setheading(0)
+        elif ghost.direction==Direction.DOWN:
+            setheading(90)
+        else:
+            setheading(0)
+
+        dot(15, ghost.color)
+        pencolor("black")
+        pensize(3)
+        forward(7.5)
+
     def _draw_target(self, mapPos: Point):
         """
         給定 table 的座標 mapPos，在裡面畫出目標點
@@ -461,10 +477,7 @@ class Canva:
         else:
             setheading(0)
 
-        print(heading())
-
         deg = min(pacman.animation_counter, 6-pacman.animation_counter)*15
-        print(pacman.animation_counter, deg)
         fillcolor(pacman.color)
         penup()
         begin_fill()
@@ -526,8 +539,8 @@ if __name__ == "__main__":
     pacman = Pacman(Point(-1, -1), "yellow", gameMap, screen, 4)
     blinky = Blinky(Point(-1, -1), "red", gameMap, screen, 8)
     inky = Inky(Point(-1, -1), "cyan", gameMap, screen, 8, blinky)
-    pinky = Pinky(Point(-1, -1), "pink", gameMap, screen, 8)
-    clyde = Clyde(Point(-1, -1), "orange", gameMap, screen, 8)
+    pinky = Pinky(Point(-1, -1), "pink", gameMap, screen, 6)
+    clyde = Clyde(Point(-1, -1), "orange", gameMap, screen, 6)
     for i in range(gameMap.height//2, -1, -1):
         for j in range(gameMap.width):
             if pacman.pos==Point(-1, -1) and gameMap[i][j]==0:
