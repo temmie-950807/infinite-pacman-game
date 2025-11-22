@@ -49,10 +49,6 @@ class Point:
 class Direction(Enum):
     LEFT, UP, RIGHT, DOWN, STOP = Point(0, -1), Point(-1, 0), Point(0, 1), Point(1, 0), Point(0, 0)
 
-    @property
-    def opposite(self):
-        return Point(-self.value.y, -self.value.x)
-
 class TileTable:
     def __init__(self, height = TILE_HEIGHT + TILE_BUFFER, width = TILE_WIDTH):
         self.table_tmp = [[0] * width for _ in range(height)]
@@ -251,7 +247,17 @@ class Pacman(Unit):
 class Ghost(Unit):
     def __init__(self, pos, color, gameMap, screen, speed):
         self.targetPos = Point(-1, -1)
+        self.previousPos = Point(-1, -1)
         super().__init__(pos, color, gameMap, screen, speed)
+
+    def move(self, in_canva):
+        self.counter += 1
+        if (self.counter==self.speed):
+            self.counter = 0
+            nextPos = self.pos + self.direction.value
+            if self.gameMap.is_valid(nextPos) and in_canva(nextPos):
+                self.previousPos = self.pos
+                self.pos = nextPos
 
     def think(self, pacman: Pacman):
         """
@@ -262,13 +268,11 @@ class Ghost(Unit):
 
         bestDirection = Direction.STOP
         minDistance = float("inf")
-        oppositeDirection = self.direction.opposite
 
         for dir in [Direction.LEFT, Direction.UP, Direction.RIGHT, Direction.DOWN]:
-            if dir.value==oppositeDirection:
-                continue
-
             nextPos = self.pos + dir.value
+            if nextPos==self.previousPos:
+                continue
             if self.gameMap.is_valid(nextPos):
                 dis = self.targetPos.distance_sq(nextPos)
                 if dis<minDistance:
