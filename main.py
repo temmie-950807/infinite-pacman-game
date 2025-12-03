@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from queue import Queue
 
 TILE_BUFFER = 5
-TILE_HEIGHT = 12
+TILE_HEIGHT = 10
 TILE_WIDTH = 4
 BLOCK = [
     # 直線
@@ -160,6 +160,8 @@ class GameMap:
                         self.table[i][j]==self.table[i+DY[k]][j+DX[k]]):
                         self.fill(i, j, i+DY[k], j+DX[k])
 
+        print(f"height = {self.height} width = {self.width}")
+
     @property
     def height(self):
         return len(self.gameTable)
@@ -251,7 +253,7 @@ class Pacman(Unit):
         self.screen.listen()
         self.score = 0
         self.animationCounter = 0 # 0 1 2 3 4 5
-        self.health = 3
+        self.health = 1000
         self.mode = PacmanMode.NORMAL
 
     def update_mode(self):
@@ -560,6 +562,8 @@ class Canva:
             teleport(10, SCREEN_HEIGHT-70)
             write(f"POWER: {game.ghosts[0].freightCount}", font=("Arial", 16, "normal"))
 
+        self._draw_table()
+
         update()
 
     def in_canva(self, mapPos: Point) -> bool:
@@ -677,6 +681,42 @@ class Canva:
         # 3 -> 45
         # 4 -> 30
         # 5 -> 15
+
+    def _draw_line(self, mapY1, mapX1, mapY2, mapX2):
+        """
+        給定 table 的 (mapY1, mapX1) 跟 (mapY2, mapX2)，畫出連線
+        """
+        screen1 = self._position(Point(mapY1+0.5, mapX1+0.5))
+        screen2 = self._position(Point(mapY2+0.5, mapX2+0.5))
+        teleport(screen1.x, screen1.y)
+        goto(screen2.x , screen2.y)
+
+    def _draw_border(self, mapY, mapX, dir):
+        """
+        給定 table 的 (mapY, mapX) 和方向 dir，畫出該格的邊界
+        0: RIGHT
+        1: DOWN
+        """
+        if dir==0:
+            self._draw_line(mapY, mapX, mapY, mapX+1)
+        else:
+            self._draw_line(mapY, mapX, mapY+1, mapX)
+
+    def _draw_table(self):
+        """
+        畫灰色座標網格
+        """
+        pencolor("#CCCCCC")
+        pensize(1)
+        for i in range(-1, self.gameTable.height):
+            for j in range(-1, self.gameTable.width):
+                if i<self.gameTable.height-1 and j<self.gameTable.width-1:
+                    self._draw_border(i, j, 0)  # RIGHT
+                    self._draw_border(i, j, 1)  # DOWN
+                elif i==self.gameTable.height-1 and j<self.gameTable.width-1:
+                    self._draw_border(i, j, 0)  # RIGHT
+                elif i<self.gameTable.height-1 and j==self.gameTable.width-1:
+                    self._draw_border(i, j, 1)  # DOWN
         
 class Game:
     def __init__(self, gameMap: GameMap, pacman: Pacman, ghosts: list[Ghost], food: Food, canva: Canva):
